@@ -1,9 +1,11 @@
 local api = vim.api
+-- TODO moves these to state
 local buf, win local namespace_id = nil
 local state = {
     narrow_results = {},
     debounce_count = 0,
-    query = ""
+    query = "",
+    from_win = nil
 }
 local function open_window()
    buf = api.nvim_create_buf(false, true) -- create new emtpy buffer
@@ -115,13 +117,16 @@ local function display_results(narrow_results)
     api.nvim_buf_set_lines(buf, 1, -1, false, results)
 
     -- now add highlights
+    -- garbage/naive implementation.
+    -- Doesnt handle single line with multiple matches,
+    -- preserve case sensitivity, or patterns
     for row, result in ipairs(state.narrow_results) do
         if result.is_header then
             api.nvim_buf_add_highlight(buf, -1, "NarrowHeader", row, 0, -1)
         else
-            local col_start, col_end = string.find(result.text, state.query)
+            local col_start, col_end = string.find(results[row], state.query)
             if col_start and col_end then
-                api.nvim_buf_add_highlight(buf, -1, "NarrowMatch", row, col_start, col_end)
+                api.nvim_buf_add_highlight(buf, -1, "NarrowMatch", row, col_start - 1, col_end)
             end
         end
     end
@@ -167,6 +172,8 @@ local function search(query_term)
 end
 
 local function narrow()
+   state.from_win = api.nvim_tabpage_get_win(0)
+   print("from_win: " .. vim.inspect(state.from_win))
    open_window()
 
    namespace_id = api.nvim_create_namespace "narrow"
@@ -177,16 +184,34 @@ local function narrow()
          vim.on_key(nil, namespace_id) end, })
 
    vim.on_key(function(key)
-       print("key pressed: " .. vim.inspect(key))
-
       local cursor = api.nvim_win_get_cursor(win)
-      print("cursor pos: " .. vim.inspect(cursor))
       if cursor[1] == 1 and cursor[2] < 3 then
-          print("resetting cursor!")
           api.nvim_buf_set_lines(buf, 0, 0, false, {" >  "})
           api.nvim_buf_set_lines(buf, 1, -1, false, {})
           api.nvim_win_set_cursor(win, {1, 3})
       end
+
+    local function on_result_hovered()
+        local cursor = api.nvim_win_get_cursor(win)
+        local result = state.narrow_results[result_index_from_cursor(cursor)]
+        if result.header and state.current_header ~= result.header then
+            state.current_header = result.header
+            api.nvim_set_current_win(state.from_win)
+            if state.need_del then
+                if api.nvim_get_current_win() == state.from_win then
+                    local cur_buf = api.nvim_get_current_buf()
+                    print("deleting buffer: " .. vim.inspect(cur_buf))
+                    api.nvim_buf_delete(cur_buf, {})
+                else
+                    print("couldn't change windows I guess?")
+                end
+            else
+                state.need_del = true
+            end
+            api.nvim_command(string.format("view %s", result.header))
+            api.nvim_set_current_win(win)
+        end
+    end
 
     if api.nvim_get_mode().mode == 'n' then
         local results = state.narrow_results
@@ -195,11 +220,13 @@ local function narrow()
             if result and result.is_header then
                 api.nvim_win_set_cursor(win, {cursor[1] + 1, cursor[2]})
             end
+            on_result_hovered()
         elseif key == 'k' then
             local result = results[result_index_from_cursor(cursor) - 1]
             if result and result.is_header then
                 api.nvim_win_set_cursor(win, {cursor[1] - 1, cursor[2]})
             end
+            on_result_hovered()
         end
     end
       -- early return if we arent' inserting text
