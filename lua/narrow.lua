@@ -5,45 +5,18 @@ local state = {
     narrow_results = {},
     debounce_count = 0,
     query = "",
-    from_win = nil
 }
-local function open_window()
-   buf = api.nvim_create_buf(false, true) -- create new emtpy buffer
-   api.nvim_buf_set_option(buf, "bufhidden", "wipe")
-   api.nvim_buf_set_lines(buf, 0, 0, false, {" >  "})
+local function open_search_buffer()
+    state.orig_win = api.nvim_get_current_win()
+    print("opening search buffer with current window list: " .. vim.inspect(api.nvim_list_wins()))
+    api.nvim_command("split narrow-results")
+    win = api.nvim_get_current_win()
+    buf = api.nvim_win_get_buf(win)
 
-   -- get dimensions
-   local width = api.nvim_get_option("columns")
-   local height = api.nvim_get_option("lines")
+    api.nvim_buf_set_lines(buf, 0, 0, false, {" >  "})
+    api.nvim_buf_set_lines(buf, 1, -1, false, {})
+    api.nvim_win_set_cursor(win, {1, 3})
 
-   -- calculate our floating window size
-   local win_height = math.ceil(height * 0.4)
-   local win_width = math.ceil(width)
-
-   -- and its starting position
-   local row = height * 0.6
-   local col = 0
-
-   -- set some options
-   local opts = {
-      style = "minimal",
-      relative = "editor",
-      width = win_width,
-      height = win_height,
-      row = row,
-      col = col,
-      border = "rounded",
-      noautocmd = true
-   }
-   -- and finally create it with buffer attached
-   --
-   win = api.nvim_open_win(buf, true, opts)
-   api.nvim_win_set_option(win, 'winhl', 'Normal:Normal')
-   api.nvim_win_set_option(win, 'wrap', false)
-   api.nvim_win_set_option(win, 'cursorline', true)
-   api.nvim_win_set_cursor(win, {1, 3})
-
-   api.nvim_buf_set_keymap(buf, 'n', '<ESC>', ':lua vim.api.nvim_win_close(0, true) <CR>', { nowait = true, noremap = true, silent = true })
    api.nvim_command("startinsert")
 end
 
@@ -54,7 +27,6 @@ NarrowResult.__index = NarrowResult
 
 function NarrowResult:new(raw_line)
    local header, row, column, text = string.match(raw_line, "([^:]*):(%d+):(%d+):(.*)")
-   if header == nil then print("WAT: " .. raw_line) end
    local this = {
       header = header,
       row = tonumber(row),
@@ -80,15 +52,12 @@ function result_index_from_cursor(cursor)
 end
 
 local function append_narrow_results(result_buffer, raw_result_string)
-    -- TODO: I wonder if we're splitting results that contain newlines?
    local vals = vim.split(raw_result_string, "\n")
    for _, line in pairs(vals) do
       if line ~= "" then
         local result = NarrowResult:new(line)
-        if result.header then -- splitting on newline might be flawed
+        if result.header then
             table.insert(result_buffer, result)
-        else
-            print("bad split?: " .. raw_result_string)
         end
       end
    end
@@ -172,9 +141,7 @@ local function search(query_term)
 end
 
 local function narrow()
-   state.from_win = api.nvim_tabpage_get_win(0)
-   print("from_win: " .. vim.inspect(state.from_win))
-   open_window()
+   open_search_buffer()
 
    namespace_id = api.nvim_create_namespace "narrow"
 
@@ -191,26 +158,28 @@ local function narrow()
           api.nvim_win_set_cursor(win, {1, 3})
       end
 
-    local function on_result_hovered()
-        local cursor = api.nvim_win_get_cursor(win)
-        local result = state.narrow_results[result_index_from_cursor(cursor)]
-        if result.header and state.current_header ~= result.header then
+    local on_result_hovered = function(result_index)
+        local result = state.narrow_results[result_index]
+        if result and result.header and state.current_header ~= result.header then
             state.current_header = result.header
-            api.nvim_set_current_win(state.from_win)
-            if state.need_del then
-                if api.nvim_get_current_win() == state.from_win then
-                    local cur_buf = api.nvim_get_current_buf()
-                    print("deleting buffer: " .. vim.inspect(cur_buf))
-                    api.nvim_buf_delete(cur_buf, {})
-                else
-                    print("couldn't change windows I guess?")
-                end
+            api.nvim_set_current_win(state.orig_win)
+            api.nvim_command(string.format("view %s", result.header))
+
+            if state.need_del and state.cur_buf then
+                api.nvim_buf_delete(state.cur_buf, {})
             else
                 state.need_del = true
             end
-            api.nvim_command(string.format("view %s", result.header))
-            api.nvim_set_current_win(win)
+            -- cache new result file buffer
+            state.cur_buf = api.nvim_get_current_buf()
+        elseif result and result.header then
+            api.nvim_set_current_win(state.orig_win)
+            api.nvim_set_current_buf(state.cur_buf)
+            api.nvim_win_set_cursor(state.orig_win, {result.row, result.column})
         end
+        -- switch back to result buffer
+        api.nvim_set_current_win(win)
+        api.nvim_set_current_buf(buf)
     end
 
     if api.nvim_get_mode().mode == 'n' then
@@ -220,13 +189,13 @@ local function narrow()
             if result and result.is_header then
                 api.nvim_win_set_cursor(win, {cursor[1] + 1, cursor[2]})
             end
-            on_result_hovered()
+            on_result_hovered(result_index_from_cursor(cursor) + 2)
         elseif key == 'k' then
             local result = results[result_index_from_cursor(cursor) - 1]
             if result and result.is_header then
                 api.nvim_win_set_cursor(win, {cursor[1] - 1, cursor[2]})
             end
-            on_result_hovered()
+            on_result_hovered(result_index_from_cursor(cursor) - 2)
         end
     end
       -- early return if we arent' inserting text
