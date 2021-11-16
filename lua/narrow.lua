@@ -163,8 +163,8 @@ local function narrow()
         if result and result.header and state.current_header ~= result.header then
             state.current_header = result.header
             api.nvim_set_current_win(state.orig_win)
-            api.nvim_command(string.format("view %s", result.header))
-
+            api.nvim_command(string.format("noa edit %s", result.header))
+            api.nvim_command("TSBufEnable highlight")
             if state.need_del and state.cur_buf then
                 api.nvim_buf_delete(state.cur_buf, {})
             else
