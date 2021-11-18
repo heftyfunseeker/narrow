@@ -7,5 +7,5 @@ Narrow is an editor oriented search plugin that places grep search results in a 
 
 ![Prototype Demo](https://media.giphy.com/media/T0QupBTy4oZY6uT0eG/giphy.gif)
 
-more README details to come as projet matures
+more README details to come as project matures
 
