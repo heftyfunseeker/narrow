@@ -22,12 +22,27 @@ local function readFileSync(path)
 end
 
 local function hl_buffer(result_header)
-    local ft = result_header:match("^.+(%..+)$")
-    ft = ft:sub(2, -1)
+    local ext_to_type = {}
+    ext_to_type[".lua"] = "lua"
+    ext_to_type[".rs"] = "rust"
+
+    local ext = result_header:match("^.+(%..+)$")
+    local ft = ext_to_type[ext]
+    if ft == nil then ft = ext:sub(2, -1) end
+
     local ft_parser = ts_parsers.get_parser(state.preview_buf, ft)
+    if ft_parser ~= state.current_parser then
+        print("destroying highlighter")
+        if state.current_hl then
+            state.current_hl:destroy()
+        end
+        state.current_parser = ft_parser
+    end
+
     if ft_parser then
-        vim.treesitter.highlighter.new(ft_parser)
+        state.current_hl = vim.treesitter.highlighter.new(ft_parser)
     else
+        print("setting regex syntax")
         api.nvim_buf_set_option(state.preview_buf, 'syntax', ft)
     end
 end
