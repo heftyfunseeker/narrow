@@ -1,23 +1,70 @@
+ -- local has_ts, _ = pcall(require, "nvim-treesitter")
+local _, ts_configs = pcall(require, "nvim-treesitter.configs")
+local _, ts_parsers = pcall(require, "nvim-treesitter.parsers")
+
 local api = vim.api
+
 -- TODO moves these to state
 local buf, win local namespace_id = nil
 local state = {
     narrow_results = {},
     debounce_count = 0,
     query = "",
+    current_header = ""
 }
+
+local function readFileSync(path)
+  local fd = assert(vim.loop.fs_open(path, "r", 438))
+  local stat = assert(vim.loop.fs_fstat(fd))
+  local data = assert(vim.loop.fs_read(fd, stat.size, 0))
+  assert(vim.loop.fs_close(fd))
+  return data
+end
+
+local function hl_buffer(result_header)
+    local ft = result_header:match("^.+(%..+)$")
+    ft = ft:sub(2, -1)
+    local ft_parser = ts_parsers.get_parser(state.preview_buf, ft)
+    if ft_parser then
+        vim.treesitter.highlighter.new(ft_parser)
+    else
+        api.nvim_buf_set_option(state.preview_buf, 'syntax', ft)
+    end
+end
+
 local function open_search_buffer()
-    state.orig_win = api.nvim_get_current_win()
+    -- TODO: we should set custom types for our result and preview buffer?
+    -- api.nvim_buf_set_option(buf, 'filetype', 'nvim-oldfile')
+    state.debounce_count = 0
+    state.narrow_results = {}
+    state.query = ""
+    state.preview_win = api.nvim_get_current_win()
     print("opening search buffer with current window list: " .. vim.inspect(api.nvim_list_wins()))
+    api.nvim_command("edit narrow-preview")
+    state.preview_buf = api.nvim_get_current_buf()
+    print("dumping handles")
+    print("state_win: " .. state.preview_win)
+    print("state_buf: " .. state.preview_buf)
+
+    api.nvim_buf_set_option(state.preview_buf, 'buftype', 'nofile')
+    api.nvim_buf_set_option(state.preview_buf, 'swapfile', false)
+    api.nvim_buf_set_option(state.preview_buf, 'bufhidden', 'wipe')
     api.nvim_command("split narrow-results")
     win = api.nvim_get_current_win()
     buf = api.nvim_win_get_buf(win)
+    api.nvim_buf_set_option(buf, 'buftype', 'nofile')
+    api.nvim_buf_set_option(buf, 'swapfile', false)
+    api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
 
     api.nvim_buf_set_lines(buf, 0, 0, false, {" >  "})
     api.nvim_buf_set_lines(buf, 1, -1, false, {})
     api.nvim_win_set_cursor(win, {1, 3})
 
-   api.nvim_command("startinsert")
+    api.nvim_command("startinsert")
+    print("win: " .. win)
+    print("buf: " .. buf)
+    api.nvim_buf_set_keymap(buf, 'n', '<ESC>', ':lua require("narrow").narrow_exit() <CR>', { nowait = true, noremap = true, silent = true })
+
 end
 
 -- simple object that parses a grep line
@@ -46,7 +93,7 @@ function NarrowResult:new_header(header_text)
    return this
 end
 
-function result_index_from_cursor(cursor)
+local function result_index_from_cursor(cursor)
     local cursor_row = cursor[1]
     return cursor_row - 1
 end
@@ -61,6 +108,15 @@ local function append_narrow_results(result_buffer, raw_result_string)
         end
       end
    end
+end
+
+local function string_to_lines(str)
+   local vals = vim.split(str, "\n")
+   local lines = {}
+   for _, line in pairs(vals) do
+      table.insert(lines, line)
+   end
+   return lines
 end
 
 local function display_results(narrow_results)
@@ -104,6 +160,7 @@ end
 -- spawn rg and parse and append stdio stream into a narrow_results buffer
 -- on exit, take the narrow_results and display them in our buffer
 local function search(query_term)
+    print("searching with .. " .. query_term)
    local narrow_results = {}
 
    local stdout = vim.loop.new_pipe(false)
@@ -148,6 +205,7 @@ local function narrow()
    -- clear our input listener
    api.nvim_buf_attach(buf, false, {
       on_detach = function(detach_str, buf_handle)
+         print("detaching on_key handler")
          vim.on_key(nil, namespace_id) end, })
 
    vim.on_key(function(key)
@@ -158,45 +216,41 @@ local function narrow()
           api.nvim_win_set_cursor(win, {1, 3})
       end
 
-    local on_result_hovered = function(result_index)
-        local result = state.narrow_results[result_index]
+
+    local on_result_hovered = function(result)
         if result and result.header and state.current_header ~= result.header then
+            local file_str = readFileSync(result.header)
             state.current_header = result.header
-            api.nvim_set_current_win(state.orig_win)
-            api.nvim_command(string.format("noa edit %s", result.header))
-            api.nvim_command("TSBufEnable highlight")
-            if state.need_del and state.cur_buf then
-                api.nvim_buf_delete(state.cur_buf, {})
-            else
-                state.need_del = true
-            end
-            -- cache new result file buffer
-            state.cur_buf = api.nvim_get_current_buf()
+            state.preview_lines = string_to_lines(file_str)
+            api.nvim_buf_set_lines(state.preview_buf, 0, -1, false, state.preview_lines)
+            hl_buffer(result.header)
         elseif result and result.header then
-            api.nvim_set_current_win(state.orig_win)
-            api.nvim_set_current_buf(state.cur_buf)
-            api.nvim_win_set_cursor(state.orig_win, {result.row, result.column})
+            if result.row < #state.preview_lines then
+                api.nvim_win_set_cursor(state.preview_win, {result.row, 0})
+            end
         end
+        -- TODO: do I need this?
         -- switch back to result buffer
         api.nvim_set_current_win(win)
         api.nvim_set_current_buf(buf)
     end
 
+    local schedule_hover = function(key)
+        vim.defer_fn(function()
+            if buf == nil or win == nil then return end
+            local c = api.nvim_win_get_cursor(win)
+            local results = state.narrow_results
+            local result = results[result_index_from_cursor(c)]
+
+            if result == nil then return end
+            if result.is_header then return end
+            if result then on_result_hovered(result) end
+        end, 0)
+    end
+
     if api.nvim_get_mode().mode == 'n' then
-        local results = state.narrow_results
-        if key == 'j' then
-            local result = results[result_index_from_cursor(cursor) + 1]
-            if result and result.is_header then
-                api.nvim_win_set_cursor(win, {cursor[1] + 1, cursor[2]})
-            end
-            on_result_hovered(result_index_from_cursor(cursor) + 2)
-        elseif key == 'k' then
-            local result = results[result_index_from_cursor(cursor) - 1]
-            if result and result.is_header then
-                api.nvim_win_set_cursor(win, {cursor[1] - 1, cursor[2]})
-            end
-            on_result_hovered(result_index_from_cursor(cursor) - 2)
-        end
+        print("cursor at: " .. vim.inspect(cursor))
+        schedule_hover(key)
     end
       -- early return if we arent' inserting text
       -- we should also test if we're on the query input line
@@ -209,13 +263,15 @@ local function narrow()
       end
 
       state.debounce_count = state.debounce_count + 1
+      print(state.debounce_count)
       vim.defer_fn(function()
+          if buf == nil then return end
+
           state.debounce_count = state.debounce_count - 1
           if state.debounce_count > 0 then
               return
           end
-         -- I should check that this isn't in flight
-         -- before kicking off another query (or drop it if I know another one is inbound)
+
          local query = api.nvim_buf_get_lines(buf, 0, 1, false)[1]
          query = string.gsub(query, "%s+", "")
          query = string.match(query, ">(.*)")
@@ -231,6 +287,16 @@ local function narrow()
    end, namespace_id)
 end
 
+local function narrow_exit()
+    api.nvim_buf_delete(state.preview_buf, {})
+    api.nvim_buf_delete(buf, {})
+    buf = nil
+    state.preview_buf = nil
+    state.narrow_results = 0
+    state.current_header = ""
+end
+
 return {
    narrow = narrow,
+   narrow_exit = narrow_exit
 }
