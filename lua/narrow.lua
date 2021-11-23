@@ -94,7 +94,7 @@ local function open_search_buffer()
   api.nvim_buf_set_keymap(
     buf,
     "n",
-    "<leader>o",
+    "<CR>",
     ':lua require("narrow").narrow_open_result() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
@@ -355,6 +355,7 @@ local function narrow_open_result()
 
   narrow_exit()
   api.nvim_command("edit " .. result.header)
+  api.nvim_win_set_cursor(0, { result.row, result.column - 1 })
 end
 
 return {
