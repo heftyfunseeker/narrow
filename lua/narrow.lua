@@ -1,3 +1,4 @@
+local utils = require("utils")
 local api = vim.api
 
 -- TODO moves these to state
@@ -12,37 +13,17 @@ local state = {
   current_parser = nil,
 }
 
-local function read_file_sync(path)
-  local fd = assert(vim.loop.fs_open(path, "r", 438))
-  local stat = assert(vim.loop.fs_fstat(fd))
-  local data = assert(vim.loop.fs_read(fd, stat.size, 0))
-  assert(vim.loop.fs_close(fd))
-  return data
-end
-
+-- I think a bug was introduced in: https://github.com/neovim/neovim/commit/1a631026a942b3311adec0bee6d9b0b932c5de31#diff-c5353e01b6c6e65a2ddf24aaa7d673faaddba2986a71dcdfe4eed70ccf89a746R80
+-- the prefered method get_parser doesn't respect file type, so we use create_parser directly.
+-- Or... maybe it's preferred to create a new buffer for each file read (which is what telescope does), but
+-- that seems less efficient (and probably because of how generic the framework is)
 local function hl_buffer(result_header)
   local _, ts_parsers = pcall(require, "nvim-treesitter.parsers")
-  local ext_to_type = {}
-  ext_to_type[".lua"] = "lua"
-  ext_to_type[".rs"] = "rust"
-  ext_to_type[".md"] = "markdown"
-  ext_to_type[".vim"] = "vim"
-
-  local ext = result_header:match "^.+(%..+)$"
-  local ft = ext_to_type[ext]
-  if ft == nil then
-    ft = ext:sub(2, -1)
-  end
-
-  -- I think a bug was introduced in: https://github.com/neovim/neovim/commit/1a631026a942b3311adec0bee6d9b0b932c5de31#diff-c5353e01b6c6e65a2ddf24aaa7d673faaddba2986a71dcdfe4eed70ccf89a746R80
-  -- the prefered method get_parser doesn't respect file type, so we use create_parser directly.
-  -- Or... maybe it's preferred to create a new buffer for each file read (which is what telescope does), but
-  -- that seems less efficient (and probably because of how generic the framework is)
   local ft_parser = nil
+  local ft = utils.get_parser(result_header)
   if ts_parsers.has_parser(ft) then
     ft_parser = vim.treesitter._create_parser(state.preview_buf, ft)
   end
-
   if ft_parser ~= state.current_parser then
     if state.current_hl then
       state.current_hl:destroy()
@@ -52,8 +33,6 @@ local function hl_buffer(result_header)
   end
 
   if ft_parser then
-    print("parser for: " .. ft)
-    print(vim.inspect(ft_parser))
     state.current_hl = vim.treesitter.highlighter.new(ft_parser)
   else
     api.nvim_buf_set_option(state.preview_buf, "syntax", ft)
@@ -252,7 +231,7 @@ local function narrow()
 
     local on_result_hovered = function(result)
       if result and result.header and state.current_header ~= result.header then
-        local file_str = read_file_sync(result.header)
+        local file_str = utils.read_file_sync(result.header)
         state.current_header = result.header
         state.preview_lines = string_to_lines(file_str)
         api.nvim_buf_set_lines(state.preview_buf, 0, -1, false, state.preview_lines)
