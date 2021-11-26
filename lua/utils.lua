@@ -25,4 +25,26 @@ M.get_parser = function(result_header)
   return ft
 end
 
+M.hl_buffer = function(state, result_header)
+  local _, ts_parsers = pcall(require, "nvim-treesitter.parsers")
+  local ft_parser = nil
+  local ft = M.get_parser(result_header)
+  if ts_parsers.has_parser(ft) then
+    ft_parser = vim.treesitter._create_parser(state.preview_buf, ft)
+  end
+  if ft_parser ~= state.current_parser then
+    if state.current_hl then
+      state.current_hl:destroy()
+      state.current_hl = nil
+    end
+    state.current_parser = ft_parser
+  end
+
+  if ft_parser then
+    state.current_hl = vim.treesitter.highlighter.new(ft_parser)
+  else
+    vim.api.nvim_buf_set_option(state.preview_buf, "syntax", ft)
+  end
+end
+
 return M
