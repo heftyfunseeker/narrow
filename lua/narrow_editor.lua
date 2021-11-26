@@ -28,6 +28,11 @@ function NarrowEditor:_build_layout(config)
 
   -- create results buffer
   api.nvim_command("noa split narrow-results")
+  api.nvim_command("set nonu")
+  api.nvim_command("set nornu")
+  -- TODO: result buffer works, but the preview buffer looks borked
+  -- api.nvim_command("set cursorline")
+  -- api.nvim_command("hi def link CursorLine QuickFixLine")
   self.results_win = api.nvim_get_current_win()
   self.results_buf = api.nvim_win_get_buf(self.results_win)
   api.nvim_buf_set_option(self.results_buf, "buftype", "nofile")
@@ -38,7 +43,7 @@ function NarrowEditor:_build_layout(config)
   api.nvim_buf_set_lines(self.results_buf, 1, -1, false, {})
 
   api.nvim_win_set_cursor(self.results_win, { 1, 3 })
-  api.nvim_command "startinsert"
+  api.nvim_command("startinsert")
 
   api.nvim_buf_attach(self.result_buf, false, {
     on_detach = function(detach_str, buf_handle)
