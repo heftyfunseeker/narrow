@@ -37,6 +37,9 @@ function NarrowEditor:_build_layout(config)
   api.nvim_buf_set_lines(self.results_buf, 0, 0, false, { " >  " })
   api.nvim_buf_set_lines(self.results_buf, 1, -1, false, {})
 
+  api.nvim_win_set_cursor(self.results_win, { 1, 3 })
+  api.nvim_command "startinsert"
+
   api.nvim_buf_attach(self.result_buf, false, {
     on_detach = function(detach_str, buf_handle)
       vim.on_key(nil, self.namespace_id)
@@ -46,6 +49,8 @@ function NarrowEditor:_build_layout(config)
   vim.on_key(function(key)
     self:on_key(key)
   end, self.namespace_id)
+
+
 end
 
 -- should we instead expose se.get_results_buf()?
@@ -170,6 +175,8 @@ end
 
 function NarrowEditor:search(query_term)
   print("searching with .. " .. query_term)
+  -- clear previous results out
+  self.narrow_results = {}
 
   local stdout = vim.loop.new_pipe(false)
   local stderr = vim.loop.new_pipe(false)
