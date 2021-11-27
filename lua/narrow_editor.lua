@@ -28,8 +28,9 @@ function NarrowEditor:_build_layout(config)
 
   -- create results buffer
   api.nvim_command("noa split narrow-results")
-  api.nvim_command("set nonu")
-  api.nvim_command("set nornu")
+
+  vim.wo.number = false
+  vim.wo.relativenumber = false
   -- TODO: result buffer works, but the preview buffer looks borked
   -- api.nvim_command("set cursorline")
   -- api.nvim_command("hi def link CursorLine QuickFixLine")
@@ -54,8 +55,18 @@ function NarrowEditor:_build_layout(config)
   vim.on_key(function(key)
     self:on_key(key)
   end, self.namespace_id)
+end
 
+function NarrowEditor:_define_signs(config)
+  api.nvim_command(":sign define narrow_result_pointer text=> texthl=Directory")
+end
 
+function NarrowEditor:_apply_signs()
+  local c = api.nvim_win_get_cursor(self.results_win)
+
+  local buf_name = api.nvim_buf_get_name(self.results_buf)
+  api.nvim_command(":sign unplace * file="..buf_name)
+  api.nvim_command(":sign place 1 line="..tostring(c[1]).." name=narrow_result_pointer file="..buf_name)
 end
 
 -- should we instead expose se.get_results_buf()?
@@ -91,11 +102,17 @@ function NarrowEditor:new(config)
     current_header = "",
     current_hl = nil,
     current_parser = nil,
+    -- restore user config
+    wo = {
+      number = vim.wo.number,
+      relativenumber = vim.wo.relativenumber
+    }
   }
   self.__index = self
   setmetatable(new_obj, self)
   new_obj:_build_layout(config)
   new_obj:_set_keymaps(config)
+  new_obj:_define_signs(config)
 
   -- clear our input listener
   return new_obj
@@ -108,6 +125,9 @@ function NarrowEditor:drop()
   self.preview_buf = nil
   self.narrow_results = 0
   self.current_header = ""
+
+  vim.wo.number = self.wo.number
+  vim.wo.relativenumber = self.wo.relativenumber
 end
 
 function NarrowEditor:add_grep_result(grep_results)
@@ -235,6 +255,7 @@ function NarrowEditor:on_key(key)
     elseif result and result.header then
       if result.row < #self.preview_lines then
         api.nvim_win_set_cursor(self.preview_win, { result.row, 0 })
+        self:_apply_signs()
       end
     end
   end
