@@ -342,19 +342,19 @@ function NarrowEditor:update_real_file()
     else
       if display_text ~= narrow_result.display_text then
         -- add the changed line
-        table.insert(changes, { narrow_result = narrow_result, changed_text = display_text } )
-        print("line: " .. display_text .. " not the same")
+        local row, col, text = string.match(display_text, "[%s]*(%d+):[%s]*(%d+):(.*)")
+        -- TODO: add validation here
+        table.insert(changes, { narrow_result = narrow_result, changed_text = text } )
       end
     end
   end
 
-  -- we should batch these changes by header to avoid the io thrashing
-  -- but we'll start with this naive impl
+  -- TODO: batch these changes by header to avoid the io thrashing
   for _, change in ipairs(changes) do
     local nr = change.narrow_result
-    local file_lines = utils.read_file_sync(change.narrow_result.header)
+    local file_lines = string_to_lines(utils.read_file_sync(change.narrow_result.header))
     file_lines[nr.row] = change.changed_text
-    utils.write_file_sync(change.narrow_result.header, file_lines)
+    utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
   end
 end
 
