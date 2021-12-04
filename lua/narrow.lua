@@ -21,8 +21,13 @@ local function narrow_open_result()
   api.nvim_win_set_cursor(0, { result.row, result.column - 1 })
 end
 
+local function narrow_update_real_file()
+  narrow_editor:update_real_file()
+end
+
 return {
   narrow = narrow,
   narrow_exit = narrow_exit,
   narrow_open_result = narrow_open_result,
+  narrow_update_real_file = narrow_update_real_file,
 }

@@ -8,6 +8,14 @@ M.read_file_sync = function(path)
   return data
 end
 
+M.write_file_sync = function(path, data)
+  local fd = assert(vim.loop.fs_open(path, "w", 438))
+  local stat = assert(vim.loop.fs_fstat(fd))
+  local data = assert(vim.loop.fs_write(fd, data))
+  assert(vim.loop.fs_close(fd))
+  return data
+end
+
 M.get_parser = function(result_header)
   -- TODO: do this correctly
   local ext_to_type = {}

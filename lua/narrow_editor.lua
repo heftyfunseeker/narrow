@@ -33,7 +33,7 @@ function NarrowEditor:_build_layout(config)
   vim.wo.relativenumber = false
   -- TODO: result buffer works, but the preview buffer looks borked
   -- api.nvim_command("set cursorline")
-  -- api.nvim_command("hi def link CursorLine QuickFixLine")
+  -- api.nvim_command("hi def link CursorLine QuickFixLine") 
   self.results_win = api.nvim_get_current_win()
   self.results_buf = api.nvim_win_get_buf(self.results_win)
   api.nvim_buf_set_option(self.results_buf, "buftype", "nofile")
@@ -85,6 +85,13 @@ function NarrowEditor:_set_keymaps(config)
     ':lua require("narrow").narrow_open_result() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
+  api.nvim_buf_set_keymap(
+    self.results_buf,
+    "n",
+    "<C-w>",
+    ':lua require("narrow").narrow_update_real_file() <CR>',
+    { nowait = true, noremap = true, silent = true }
+  )
 end
 
 function NarrowEditor:new(config)
@@ -105,8 +112,7 @@ function NarrowEditor:new(config)
     -- restore user config
     wo = {
       number = vim.wo.number,
-      relativenumber = vim.wo.relativenumber
-    }
+      relativenumber = vim.wo.relativenumber }
   }
   self.__index = self
   setmetatable(new_obj, self)
@@ -155,7 +161,7 @@ function NarrowEditor:render_results()
       table.insert(results, header_text)
       table.insert(final_results, NarrowResult:new_header(header_text))
     end
-    table.insert(results, string.format("%3d:%3d:%s", result.row, result.column, result.text))
+    table.insert(results, result.display_text)
     table.insert(final_results, result)
   end
 
@@ -225,8 +231,7 @@ function NarrowEditor:search(query_term)
 
   local onread = function(err, input_stream)
     if err then
-      print("ERROR: ", err)
-    end
+      print("ERROR: ", err) end
 
     if input_stream then
       self:add_grep_result(input_stream)
@@ -317,6 +322,40 @@ function NarrowEditor:on_key(key)
       api.nvim_buf_set_lines(self.results_buf, 1, -1, false, {})
     end
   end, 500)
+end
+
+function NarrowEditor:update_real_file()
+  local current_header = ""
+  local buffer_lines = api.nvim_buf_get_lines(self.results_buf, 0, -1, false)
+
+  local changes = {}
+  for index = 2, #buffer_lines, 1 do
+    local display_text = buffer_lines[index]
+    local narrow_result = self.narrow_results[index - 1]
+    if narrow_result.is_header then
+      if narrow_result.text == display_text then
+        -- cache the header for validations across currently processing results
+        current_header = narrow_result.text
+      else
+        print("bad header: couldn't find: " .. display_text)
+      end
+    else
+      if display_text ~= narrow_result.display_text then
+        -- add the changed line
+        table.insert(changes, { narrow_result = narrow_result, changed_text = display_text } )
+        print("line: " .. display_text .. " not the same")
+      end
+    end
+  end
+
+  -- we should batch these changes by header to avoid the io thrashing
+  -- but we'll start with this naive impl
+  for _, change in ipairs(changes) do
+    local nr = change.narrow_result
+    local file_lines = utils.read_file_sync(change.narrow_result.header)
+    file_lines[nr.row] = change.changed_text
+    utils.write_file_sync(change.narrow_result.header, file_lines)
+  end
 end
 
 return NarrowEditor
