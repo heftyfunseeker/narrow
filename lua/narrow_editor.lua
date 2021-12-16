@@ -328,6 +328,11 @@ function NarrowEditor:update_real_file()
   local current_header = ""
   local buffer_lines = api.nvim_buf_get_lines(self.results_buf, 0, -1, false)
 
+  if #buffer_lines - 1 ~= #self.narrow_results then
+    print("validation error: number of lines were modified")
+    return
+  end
+
   local changes = {}
   for index = 2, #buffer_lines, 1 do
     local display_text = buffer_lines[index]
@@ -338,13 +343,19 @@ function NarrowEditor:update_real_file()
         current_header = narrow_result.text
       else
         print("bad header: couldn't find: " .. display_text)
+        return
       end
     else
       if display_text ~= narrow_result.display_text then
-        -- add the changed line
         local row, col, text = string.match(display_text, "[%s]*(%d+):[%s]*(%d+):(.*)")
-        -- TODO: add validation here
-        table.insert(changes, { narrow_result = narrow_result, changed_text = text } )
+
+        -- validate the row and col are the same
+        if tonumber(row) == narrow_result.row and tonumber(col) == narrow_result.column then
+          table.insert(changes, { narrow_result = narrow_result, changed_text = text } )
+        else
+          print("validation error: row and column were modified")
+          return
+        end
       end
     end
   end
