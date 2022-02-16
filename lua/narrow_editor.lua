@@ -141,7 +141,7 @@ function NarrowEditor:add_grep_result(grep_results)
   for _, line in pairs(vals) do
     if line ~= "" then
       local result = NarrowResult:new(line)
-      if result.header then
+      if result then
         table.insert(self.narrow_results, result)
       end
     end
