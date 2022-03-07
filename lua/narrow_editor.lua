@@ -416,7 +416,7 @@ function NarrowEditor:on_key(key)
       -- TODO: make function
       api.nvim_buf_set_lines(self.results_buf, 1, -1, false, {})
     end
-  end, 100)
+  end, 500)
 end
 
 function NarrowEditor:update_real_file()
