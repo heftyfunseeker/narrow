@@ -5,6 +5,9 @@ set cpo&vim " reset them to defaults
 
 hi def link NarrowHeader  Identifier
 hi def link NarrowMatch   Number
+hi def link NarrowMatch   Number
+hi def link HUD           Error
+hi def link Query         Todo
 
 " command to run our plugin
 command! Narrow lua require'narrow'.narrow()

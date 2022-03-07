@@ -17,9 +17,10 @@ function NarrowResult:new(raw_line)
   return nil
 end
 
-function NarrowResult:new_header(header_text)
+function NarrowResult:new_header(header_text, header_number)
   local this = {
     is_header = true,
+    header_number = header_number,
     text = header_text,
   }
   setmetatable(this, NarrowResult)
