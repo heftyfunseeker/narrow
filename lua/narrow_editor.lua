@@ -104,27 +104,27 @@ function NarrowEditor:_build_layout(config)
 end
 
 function NarrowEditor:_update_hud()
-  -- local results = self.narrow_results
-  -- if #results == 0 then return end
-  --
-  -- local c = api.nvim_win_get_cursor(self.results_win)
-  -- local result_index = result_index_from_cursor(c)
-  -- local result = results[result_index]
-  -- -- result headers are interleaved with result lines, so subtract the num of headers 
-  -- -- @nicco: refactor results to point to a header and keep them separate?
-  -- local i = result_index
-  -- local result_num = result_index
-  -- -- find our header by walking backwards up the results list
-  -- while i > 0 do
-  --   if results[i].is_header then
-  --     result_num = result_index - results[i].header_number - 1
-  --     break
-  --   end
-  --   i = i - 1
-  -- end 
-  -- -- @nicco: we need to calculate this centering
-  -- local results_text = "<NARROW> " .. result_num .. "/" .. self.num_results
-  -- self:_set_hud_text(results_text)
+  local results = self.narrow_results
+  if #results == 0 then return end
+
+  local c = api.nvim_win_get_cursor(self.results_win)
+  local result_index = result_index_from_cursor(c)
+  local result = results[result_index]
+  -- result headers are interleaved with result lines, so subtract the num of headers
+  -- @nicco: refactor results to point to a header and keep them separate?
+  local i = result_index
+  local result_num = result_index
+  -- find our header by walking backwards up the results list
+  while i > 0 do
+    if results[i].is_header then
+      result_num = result_index - results[i].header_number - 1
+      break
+    end
+    i = i - 1
+  end
+  -- @nicco: we need to calculate this centering
+  local results_text = "<NARROW> " .. result_num .. "/" .. self.num_results
+  self:_set_hud_text(results_text)
 end
 
 function NarrowEditor:_set_hud_text(display_text)
