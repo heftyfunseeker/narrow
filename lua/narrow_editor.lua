@@ -84,7 +84,7 @@ function NarrowEditor:_build_layout(config)
   local width = api.nvim_get_option("columns")
   self.hud_buf = api.nvim_create_buf(false, true)
 
-  api.nvim_buf_set_option(self.hub_buf, "bufhidden", "wipe")
+  api.nvim_buf_set_option(self.hud_buf, "bufhidden", "wipe")
   local opts = {
     style = "minimal",
     relative = "editor",
