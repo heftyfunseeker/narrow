@@ -1,4 +1,4 @@
-local utils = require "utils"
+local narrow_utils = require "narrow_utils"
 local NarrowResult = require "narrow_result"
 local api = vim.api
 
@@ -345,11 +345,11 @@ function NarrowEditor:on_key(key)
     self:_update_hud()
 
     if result and result.header and self.current_header ~= result.header then
-      local file_str = utils.read_file_sync(result.header)
+      local file_str = narrow_utils.read_file_sync(result.header)
       self.current_header = result.header
       self.preview_lines = string_to_lines(file_str)
       api.nvim_buf_set_lines(self.preview_buf, 0, -1, false, self.preview_lines)
-      utils.hl_buffer(self, result.header)
+      narrow_utils.hl_buffer(self, result.header)
       api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "Error", result.row - 1, result.column - 1, result.column + #self.query - 1)
     elseif result and result.header then
       if result.row < #self.preview_lines then
@@ -458,9 +458,9 @@ function NarrowEditor:update_real_file()
   -- TODO: batch these changes by header to avoid the io thrashing
   for _, change in ipairs(changes) do
     local nr = change.narrow_result
-    local file_lines = string_to_lines(utils.read_file_sync(change.narrow_result.header))
+    local file_lines = string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
     file_lines[nr.row] = change.changed_text
-    utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
+    narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
   end
 end
 
