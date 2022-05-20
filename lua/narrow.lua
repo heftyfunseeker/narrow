@@ -2,32 +2,38 @@ local api = vim.api
 local NarrowEditor = require("narrow_editor")
 local narrow_editor = nil
 
-local function narrow()
+local M = {}
+
+M.open = function()
+  api.nvim_command("hi def link NarrowHeader Identifier")
+  api.nvim_command("hi def link NarrowMatch Underlined")
+  api.nvim_command("hi def link HUD Error")
+  api.nvim_command("hi def link Query Todo")
+
   narrow_editor = NarrowEditor:new({})
 end
 
-local function narrow_exit()
-  narrow_editor:drop()
+M.close = function()
+  if narrow_editor then
+    narrow_editor:drop()
+  end
 end
 
-local function narrow_open_result()
+M.goto_result = function()
   local result = narrow_editor:get_result()
   if result == nil then
     return
   end
 
-  narrow_exit()
+  M.close()
   api.nvim_command("edit " .. result.header)
   api.nvim_win_set_cursor(0, { result.row, result.column - 1 })
 end
 
-local function narrow_update_real_file()
-  narrow_editor:update_real_file()
+M.update_real_file = function()
+  if narrow_editor then
+    narrow_editor:update_real_file()
+  end
 end
 
-return {
-  narrow = narrow,
-  narrow_exit = narrow_exit,
-  narrow_open_result = narrow_open_result,
-  narrow_update_real_file = narrow_update_real_file,
-}
+return M

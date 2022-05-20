@@ -154,22 +154,22 @@ function NarrowEditor:_set_keymaps(config)
   api.nvim_buf_set_keymap(
     self.results_buf,
     "n",
-    "<ESC>",
-    ':lua require("narrow").narrow_exit() <CR>',
+    "<C-g>",
+    ':lua require("narrow").close() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
     self.results_buf,
     "n",
     "<CR>",
-    ':lua require("narrow").narrow_open_result() <CR>',
+    ':lua require("narrow").goto_result() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
     self.results_buf,
     "n",
     "<C-w>",
-    ':lua require("narrow").narrow_update_real_file() <CR>',
+    ':lua require("narrow").update_real_file() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
 end
@@ -294,7 +294,6 @@ function NarrowEditor:get_result()
 end
 
 function NarrowEditor:search(query_term)
-  print("searching with .. " .. query_term)
   -- clear previous results out
   self.narrow_results = {}
 
@@ -350,12 +349,12 @@ function NarrowEditor:on_key(key)
       self.preview_lines = string_to_lines(file_str)
       api.nvim_buf_set_lines(self.preview_buf, 0, -1, false, self.preview_lines)
       narrow_utils.hl_buffer(self, result.header)
-      api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "Error", result.row - 1, result.column - 1, result.column + #self.query - 1)
+      api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
     elseif result and result.header then
       if result.row < #self.preview_lines then
         api.nvim_win_set_cursor(self.preview_win, { result.row, 0 })
         self:_apply_signs()
-        api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "Error", result.row - 1, result.column - 1, result.column + #self.query - 1)
+        api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
       end
     end
   end
