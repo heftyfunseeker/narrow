@@ -5,8 +5,11 @@ local narrow_editor = nil
 local M = {}
 
 M.open = function()
+  -- @todo: allow theming with colors
+  -- api.nvim_set_hl(0, "NarrowMatch", { fg = "Red", bold = true })
+  --
   api.nvim_command("hi def link NarrowHeader Identifier")
-  api.nvim_command("hi def link NarrowMatch Underlined")
+  api.nvim_command("hi def link NarrowMatch IncSearch")
   api.nvim_command("hi def link HUD Error")
   api.nvim_command("hi def link Query Todo")
 

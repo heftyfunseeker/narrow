@@ -34,7 +34,7 @@ function NarrowEditor:_build_layout(config)
     style = "minimal",
     relative = "editor",
     border = "solid",
-    width = math.floor( width * .4 ) - 2,
+    width = math.floor(width * .4) - 2,
     height = math.floor(height * .5 - 3),
     row = math.floor(height * .5),
     col = math.floor(width * .6) + 1,
@@ -49,8 +49,8 @@ function NarrowEditor:_build_layout(config)
   local opts = {
     style = "minimal",
     relative = "editor",
-    border = "solid",
-    width = math.floor(width * .6),
+    border = "rounded",
+    width = math.floor(width),
     height = math.floor(height * .5 - 3),
     row = math.floor(height * .5),
     col = 0,
@@ -88,11 +88,11 @@ function NarrowEditor:_build_layout(config)
   local opts = {
     style = "minimal",
     relative = "editor",
-    border = "none",
+    border = "rounded",
     width = 50,
     height = 1,
-    row = math.floor(height * .5),
-    col = math.floor(width * .3) - 25,
+    row = math.floor(height * .5) - 2,
+    col = math.floor(width * .5) - 25,
     zindex = 100,
     noautocmd = true,
   }
@@ -131,11 +131,10 @@ function NarrowEditor:_set_hud_text(display_text)
   local hud_width = 50
   local margin = math.ceil((hud_width - #display_text) / 2)
   local padding = string.rep(" ", margin)
-  local display_text_with_padding =  padding .. display_text .. padding
-  api.nvim_buf_set_lines(self.hud_buf, 0, -1, false, {display_text_with_padding})
+  local display_text_with_padding = padding .. display_text .. padding
+  api.nvim_buf_set_lines(self.hud_buf, 0, -1, false, { display_text_with_padding })
   api.nvim_buf_add_highlight(self.hud_buf, -1, "HUD", 0, 0, -1)
 end
-
 
 function NarrowEditor:_define_signs(config)
   api.nvim_command(":sign define narrow_result_pointer text=> texthl=Directory")
@@ -193,7 +192,8 @@ function NarrowEditor:new(config)
     -- restore user config
     wo = {
       number = vim.wo.number,
-      relativenumber = vim.wo.relativenumber }
+      relativenumber = vim.wo.relativenumber
+    }
   }
   self.__index = self
   setmetatable(new_obj, self)
@@ -219,9 +219,17 @@ function NarrowEditor:drop()
   vim.wo.relativenumber = self.wo.relativenumber
 end
 
-function NarrowEditor:add_grep_result(grep_results)
+function NarrowEditor:add_raw_results(grep_results)
   local vals = vim.split(grep_results, "\n")
   for _, line in pairs(vals) do
+    if line ~= "" then
+        table.insert(self.raw_result_lines, line)
+    end
+  end
+end
+
+function NarrowEditor:parse_raw_results()
+  for _, line in pairs(self.raw_result_lines) do
     if line ~= "" then
       local result = NarrowResult:new(line)
       if result then
@@ -229,6 +237,7 @@ function NarrowEditor:add_grep_result(grep_results)
       end
     end
   end
+  self.raw_result_lines = {}
 end
 
 function NarrowEditor:render_results()
@@ -296,6 +305,7 @@ end
 function NarrowEditor:search(query_term)
   -- clear previous results out
   self.narrow_results = {}
+  self.raw_result_lines = {}
 
   local stdout = vim.loop.new_pipe(false)
   local stderr = vim.loop.new_pipe(false)
@@ -313,16 +323,19 @@ function NarrowEditor:search(query_term)
       stderr:close()
       Handle:close()
 
+      print("calling parse raw")
+      self:parse_raw_results()
       self:render_results()
     end)
   )
 
   local onread = function(err, input_stream)
     if err then
-      print("ERROR: ", err) end
+      print("ERROR: ", err)
+    end
 
     if input_stream then
-      self:add_grep_result(input_stream)
+      self:add_raw_results(input_stream)
     end
   end
 
@@ -343,20 +356,20 @@ function NarrowEditor:on_key(key)
 
     self:_update_hud()
 
-    if result and result.header and self.current_header ~= result.header then
-      local file_str = narrow_utils.read_file_sync(result.header)
-      self.current_header = result.header
-      self.preview_lines = string_to_lines(file_str)
-      api.nvim_buf_set_lines(self.preview_buf, 0, -1, false, self.preview_lines)
-      narrow_utils.hl_buffer(self, result.header)
-      api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
-    elseif result and result.header then
-      if result.row < #self.preview_lines then
-        api.nvim_win_set_cursor(self.preview_win, { result.row, 0 })
-        self:_apply_signs()
-        api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
-      end
-    end
+    -- if result and result.header and self.current_header ~= result.header then
+    --   local file_str = narrow_utils.read_file_sync(result.header)
+    --   self.current_header = result.header
+    --   self.preview_lines = string_to_lines(file_str)
+    --   api.nvim_buf_set_lines(self.preview_buf, 0, -1, false, self.preview_lines)
+    --   narrow_utils.hl_buffer(self, result.header)
+    --   api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
+    -- elseif result and result.header then
+    --   if result.row < #self.preview_lines then
+    --     api.nvim_win_set_cursor(self.preview_win, { result.row, 0 })
+    --     self:_apply_signs()
+    --     api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
+    --   end
+    -- end
   end
 
   local schedule_hover = function(key)
@@ -445,7 +458,7 @@ function NarrowEditor:update_real_file()
 
         -- validate the row and col are the same
         if tonumber(row) == narrow_result.row and tonumber(col) == narrow_result.column then
-          table.insert(changes, { narrow_result = narrow_result, changed_text = text } )
+          table.insert(changes, { narrow_result = narrow_result, changed_text = text })
         else
           print("validation error: row and column were modified")
           return
@@ -464,4 +477,3 @@ function NarrowEditor:update_real_file()
 end
 
 return NarrowEditor
-
