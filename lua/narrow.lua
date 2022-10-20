@@ -8,10 +8,13 @@ M.open = function()
   -- @todo: allow theming with colors
   -- api.nvim_set_hl(0, "NarrowMatch", { fg = "Red", bold = true })
   --
-  api.nvim_command("hi def link NarrowHeader Identifier")
-  api.nvim_command("hi def link NarrowMatch IncSearch")
+  api.nvim_command("hi def link NarrowHeader Function")
+  api.nvim_command("hi def link NarrowMatch Identifier")
   api.nvim_command("hi def link HUD Error")
   api.nvim_command("hi def link Query Todo")
+
+  api.nvim_set_hl(0, "FloatBorder", {link="Function"})
+  api.nvim_set_hl(0, "NormalFloat", {link="Normal"})
 
   narrow_editor = NarrowEditor:new({})
 end
@@ -36,6 +39,18 @@ end
 M.update_real_file = function()
   if narrow_editor then
     narrow_editor:update_real_file()
+  end
+end
+
+M.set_focus_results_window = function()
+  if narrow_editor then
+    narrow_editor:set_focus_results_window()
+  end
+end
+
+M.set_focus_input_window = function()
+  if narrow_editor then
+    narrow_editor:set_focus_input_window()
   end
 end
 
