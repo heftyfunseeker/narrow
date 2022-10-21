@@ -54,4 +54,10 @@ M.set_focus_input_window = function()
   end
 end
 
+M.resize = function()
+  if narrow_editor then
+    narrow_editor:resize()
+  end
+end
+
 return M
