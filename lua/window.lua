@@ -88,10 +88,10 @@ function Window:new_preview_window()
   return preview_buf, preview_win
 end
 
-1. let's create a window class that saves the hardcoded width height position properties
-
-function Window:resize(win)
-  local win_config = api.nvim_win_get_config(win)
-end
+-- 1. let's create a window class that saves the hardcoded width height position properties
+--
+-- function Window:resize(win)
+--   local win_config = api.nvim_win_get_config(win)
+-- end
 
 return Window

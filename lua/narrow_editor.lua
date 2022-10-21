@@ -44,7 +44,7 @@ function NarrowEditor:_build_layout(config)
   self.input_buf, self.input_win = Window:new_input_window()
   api.nvim_set_current_win(self.input_win)
   api.nvim_win_set_buf(self.input_win, self.input_buf)
-  local prompt_text = " 📦 "
+  local prompt_text = " 👉 "
   vim.fn.prompt_setprompt(self.input_buf, prompt_text)
   api.nvim_buf_add_highlight(self.input_buf, -1, "HUD", 0, 0, prompt_text:len())
 end
