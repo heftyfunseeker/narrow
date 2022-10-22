@@ -38,18 +38,40 @@ function Window:build()
     api.nvim_buf_set_option(buffer, option_name, option_value)
   end
 
+  -- adjust percentage based dimension
+  local width = self.win_options.width
+  local height = self.win_options.height
+  local row = self.win_options.row
+  local col = self.win_options.col
+
+  if width <= 1 then
+    self.win_options.width = math.floor(width * columns)
+  end
+  if col <= 1 then
+    self.win_options.col = math.floor(col * columns)
+  end
+
+  if height <= 1 then
+    self.win_options.height = math.floor(height * lines)
+  end
+  if row <= 1 then
+    self.win_options.row = math.floor(row * lines)
+  end
+
   local window = api.nvim_open_win(buffer, true, self.win_options)
+
+  -- restore original width and height if needed
+  -- I'll just end up writing a shallow copy if this pattern balloons
+  self.win_options.height = height
+  self.win_options.width = width
+  self.win_options.col = col
+  self.win_options.row = row
 
   return buffer, window
 end
 
 Window.new_results_window = function()
-  local window = Window:new(
-    math.floor(columns),
-    math.floor(lines * .5 - 3),
-    math.floor(lines * .5) + 1,
-    0
-  )
+  local window = Window:new(1, .4, .6, 0)
 
   return window
       :set_buf_option("bufhidden", "wipe")
@@ -60,7 +82,7 @@ Window.new_results_window = function()
 end
 
 Window.new_hud_window = function()
-  local window = Window:new(math.floor(columns) - 50, 2, math.floor(lines * .5) - 2, 50)
+  local window = Window:new(.65, 2, .52, .35)
 
   return window
       :set_buf_option("bufhidden", "wipe")
@@ -71,7 +93,7 @@ Window.new_hud_window = function()
 end
 
 Window.new_input_window = function()
-  local window = Window:new(50, 2, math.floor(lines * .5) - 2, 0)
+  local window = Window:new(.35, 2, .52, 0)
 
   return window
       :set_buf_option("bufhidden", "wipe")
@@ -80,27 +102,5 @@ Window.new_input_window = function()
       :set_border({ "╭", "─", "", "", " ", "", "", "│" })
       :build()
 end
-
-Window.new_preview_window = function()
-  local window = Window:new(
-    math.floor(columns * .4) - 2,
-    math.floor(lines * .5 - 3),
-    math.floor(lines * .5),
-    math.floor(columns * .6) + 1
-  )
-
-  return window
-      :set_buf_option("bufhidden", "wipe")
-      :set_buf_option("buftype", "nofile")
-      :set_buf_option("swapfile", false)
-      :set_border("solid")
-      :build()
-end
-
--- 1. let's create a window class that saves the hardcoded width height position properties
---
--- function Window:resize(win)
---   local win_config = api.nvim_win_get_config(win)
--- end
 
 return Window
