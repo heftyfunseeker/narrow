@@ -20,11 +20,10 @@ function NarrowEditor:_build_layout(config)
   -- TODO: use configuration
 
   -- create results buffer
-  self.results_buf, self.results_win = Window:new_results_window()
+  self.results_buf, self.results_win = Window.new_results_window()
 
   api.nvim_buf_set_lines(self.results_buf, 0, -1, false, {})
 
-  api.nvim_command("startinsert")
 
   api.nvim_buf_attach(self.results_buf, false, {
     on_detach = function(detach_str, buf_handle)
@@ -37,16 +36,18 @@ function NarrowEditor:_build_layout(config)
   end, self.namespace_id)
 
   -- create floating window hud
-  self.hud_buf, self.hud_win = Window:new_hud_window()
+  self.hud_buf, self.hud_win = Window.new_hud_window()
   self:_set_hud_text("")
 
   -- input
-  self.input_buf, self.input_win = Window:new_input_window()
+  self.input_buf, self.input_win = Window.new_input_window()
   api.nvim_set_current_win(self.input_win)
   api.nvim_win_set_buf(self.input_win, self.input_buf)
   local prompt_text = " 👉 "
   vim.fn.prompt_setprompt(self.input_buf, prompt_text)
   api.nvim_buf_add_highlight(self.input_buf, -1, "HUD", 0, 0, prompt_text:len())
+
+  api.nvim_command("startinsert")
 end
 
 function NarrowEditor:_update_hud()
