@@ -17,6 +17,8 @@ M.open = function()
   api.nvim_set_hl(0, "NormalFloat", {link="Normal"})
 
   narrow_editor = NarrowEditor:new({})
+
+  vim.cmd([[ au VimResized * :lua require("narrow").resize() ]])
 end
 
 M.close = function()

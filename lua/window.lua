@@ -1,8 +1,5 @@
 local api = vim.api
 
-local columns = api.nvim_get_option("columns")
-local lines = api.nvim_get_option("lines")
-
 Window = {}
 
 function Window:new(width, height, row, col)
@@ -15,8 +12,9 @@ function Window:new(width, height, row, col)
       height = height,
       row = row,
       col = col,
-      noautocmd = true,
     },
+    buf = nil,
+    win = nil,
   }
   self.__index = self
   return setmetatable(new_obj, self)
@@ -32,42 +30,53 @@ function Window:set_buf_option(option_name, option_value)
   return self
 end
 
+-- performs a shallow copy of the config with final layout values calculated
+function Window:get_config()
+  local config = {}
+
+  for k, v in pairs(self.win_options) do
+    config[k] = v
+  end
+
+  local columns = api.nvim_get_option("columns")
+  local lines = api.nvim_get_option("lines")
+
+  -- transform any percentage attributes to final line/col values
+  if config.width <= 1 then
+    config.width = math.floor(config.width * columns)
+  end
+
+  if config.col <= 1 then
+    config.col = math.floor(config.col * columns)
+  end
+
+  if config.height <= 1 then
+    config.height = math.floor(config.height * lines)
+  end
+
+  if config.row <= 1 then
+    config.row = math.floor(config.row * lines)
+  end
+
+  return config
+end
+
 function Window:build()
   local buffer = api.nvim_create_buf(false, true)
   for option_name, option_value in pairs(self.buf_options) do
     api.nvim_buf_set_option(buffer, option_name, option_value)
   end
 
-  -- adjust percentage based dimension
-  local width = self.win_options.width
-  local height = self.win_options.height
-  local row = self.win_options.row
-  local col = self.win_options.col
+  local window = api.nvim_open_win(buffer, true, self:get_config())
 
-  if width <= 1 then
-    self.win_options.width = math.floor(width * columns)
-  end
-  if col <= 1 then
-    self.win_options.col = math.floor(col * columns)
-  end
+  self.buf = buffer
+  self.win = window
 
-  if height <= 1 then
-    self.win_options.height = math.floor(height * lines)
-  end
-  if row <= 1 then
-    self.win_options.row = math.floor(row * lines)
-  end
+  return self
+end
 
-  local window = api.nvim_open_win(buffer, true, self.win_options)
-
-  -- restore original width and height if needed
-  -- I'll just end up writing a shallow copy if this pattern balloons
-  self.win_options.height = height
-  self.win_options.width = width
-  self.win_options.col = col
-  self.win_options.row = row
-
-  return buffer, window
+function Window:resize()
+  api.nvim_win_set_config(self.win, self:get_config())
 end
 
 Window.new_results_window = function()

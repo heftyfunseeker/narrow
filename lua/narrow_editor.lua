@@ -20,12 +20,11 @@ function NarrowEditor:_build_layout(config)
   -- TODO: use configuration
 
   -- create results buffer
-  self.results_buf, self.results_win = Window.new_results_window()
+  self.results_window = Window.new_results_window()
 
-  api.nvim_buf_set_lines(self.results_buf, 0, -1, false, {})
+  api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, {})
 
-
-  api.nvim_buf_attach(self.results_buf, false, {
+  api.nvim_buf_attach(self.results_window.buf, false, {
     on_detach = function(detach_str, buf_handle)
       vim.on_key(nil, self.namespace_id)
     end,
@@ -36,16 +35,16 @@ function NarrowEditor:_build_layout(config)
   end, self.namespace_id)
 
   -- create floating window hud
-  self.hud_buf, self.hud_win = Window.new_hud_window()
+  self.hud_window = Window.new_hud_window()
   self:_set_hud_text("")
 
   -- input
-  self.input_buf, self.input_win = Window.new_input_window()
-  api.nvim_set_current_win(self.input_win)
-  api.nvim_win_set_buf(self.input_win, self.input_buf)
+  self.input_window = Window.new_input_window()
+  api.nvim_set_current_win(self.input_window.win)
+  api.nvim_win_set_buf(self.input_window.win, self.input_window.buf)
   local prompt_text = " 👉 "
-  vim.fn.prompt_setprompt(self.input_buf, prompt_text)
-  api.nvim_buf_add_highlight(self.input_buf, -1, "HUD", 0, 0, prompt_text:len())
+  vim.fn.prompt_setprompt(self.input_window.buf, prompt_text)
+  api.nvim_buf_add_highlight(self.input_window.buf, -1, "HUD", 0, 0, prompt_text:len())
 
   api.nvim_command("startinsert")
 end
@@ -54,7 +53,7 @@ function NarrowEditor:_update_hud()
   local results = self.narrow_results
   if #results == 0 then return end
 
-  local c = api.nvim_win_get_cursor(self.results_win)
+  local c = api.nvim_win_get_cursor(self.results_window.win)
   local result_index = c[1]
   local result = results[result_index]
   -- result headers are interleaved with result lines, so subtract the num of headers
@@ -79,8 +78,8 @@ function NarrowEditor:_set_hud_text(display_text)
   local margin = math.ceil((hud_width - #display_text) / 2)
   local padding = string.rep(" ", margin)
   local display_text_with_padding = padding .. display_text .. padding
-  api.nvim_buf_set_lines(self.hud_buf, 0, -1, false, { display_text_with_padding })
-  api.nvim_buf_add_highlight(self.hud_buf, -1, "HUD", 0, 0, -1)
+  api.nvim_buf_set_lines(self.hud_window.buf, 0, -1, false, { display_text_with_padding })
+  api.nvim_buf_add_highlight(self.hud_window.buf, -1, "HUD", 0, 0, -1)
 end
 
 function NarrowEditor:_define_signs(config)
@@ -88,9 +87,9 @@ function NarrowEditor:_define_signs(config)
 end
 
 function NarrowEditor:_apply_signs()
-  -- local c = api.nvim_win_get_cursor(self.results_win)
+  -- local c = api.nvim_win_get_cursor(self.results_window.win)
   --
-  -- local buf_name = api.nvim_buf_get_name(self.results_buf)
+  -- local buf_name = api.nvim_buf_get_name(self.results_window.buf)
   -- api.nvim_command(":sign unplace * file="..buf_name)
   -- api.nvim_command(":sign place 1 line="..tostring(c[1]).." name=narrow_result_pointer file="..buf_name)
 end
@@ -98,49 +97,49 @@ end
 -- should we instead expose se.get_results_buf()?
 function NarrowEditor:_set_keymaps(config)
   api.nvim_buf_set_keymap(
-    self.input_buf,
+    self.input_window.buf,
     "n",
     "<ESC>",
     ':lua require("narrow").close() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
-    self.input_buf,
+    self.input_window.buf,
     "n",
     "<CR>",
     ':lua require("narrow").set_focus_results_window() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
-    self.input_buf,
+    self.input_window.buf,
     "n",
     "j",
     ':lua require("narrow").set_focus_results_window() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
-    self.input_buf,
+    self.input_window.buf,
     "i",
     "<CR>",
     '',
     { nowait = true, noremap = false, silent = true }
   )
   api.nvim_buf_set_keymap(
-    self.results_buf,
+    self.results_window.buf,
     "n",
     "<C-g>",
     ':lua require("narrow").set_focus_input_window() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
-    self.results_buf,
+    self.results_window.buf,
     "n",
     "<CR>",
     ':lua require("narrow").goto_result() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
-    self.results_buf,
+    self.results_window.buf,
     "n",
     "<C-w>",
     ':lua require("narrow").update_real_file() <CR>',
@@ -150,17 +149,10 @@ end
 
 function NarrowEditor:new(config)
   local new_obj = {
-    hud_buf = nil,
-    hud_win = nil,
+    hud_window = nil,
+    input_window = nil,
+    results_window = nil,
 
-    input_buf = nil,
-    input_win = nil,
-
-    preview_win = nil,
-    preview_buf = nil,
-
-    results_win = nil,
-    results_buf = nil,
     -- state ---------
     namespace_id = api.nvim_create_namespace("narrow"),
     preview_buf_query_id = api.nvim_create_namespace("narrow-query"),
@@ -182,9 +174,6 @@ function NarrowEditor:new(config)
   vim.wo.number = false
   vim.wo.relativenumber = false
 
-  vim.cmd([[ au TextYankPost * silent! lua vim.highlight.on_yank() ]])
-  vim.cmd([[ au VimResized * silent! lua require("narrow").resize() ]])
-
   new_obj:_build_layout(config)
   new_obj:_set_keymaps(config)
   new_obj:_define_signs(config)
@@ -194,13 +183,14 @@ end
 
 function NarrowEditor:drop()
   -- api.nvim_buf_delete(self.preview_buf, {})
-  api.nvim_buf_delete(self.results_buf, {})
-  api.nvim_buf_delete(self.hud_buf, {})
-  api.nvim_buf_delete(self.input_buf, { force = true })
-  self.results_buf = nil
+  -- @nicco: window should implement drop
+  api.nvim_buf_delete(self.results_window.buf, {})
+  api.nvim_buf_delete(self.hud_window.buf, {})
+  api.nvim_buf_delete(self.input_window.buf, { force = true })
+  self.results_window.buf = nil
   self.preview_buf = nil
-  self.input_buf = nil
-  self.hud_buf = nil
+  self.input_window.buf = nil
+  self.hud_window = nil
   self.narrow_results = {}
   self.current_header = ""
 
@@ -209,15 +199,18 @@ function NarrowEditor:drop()
 end
 
 function NarrowEditor:resize()
-
+  print("called resize")
+  self.results_window:resize()
+  self.input_window:resize()
+  self.hud_window:resize()
 end
 
 function NarrowEditor:set_focus_results_window()
-  api.nvim_set_current_win(self.results_win)
+  api.nvim_set_current_win(self.results_window.win)
 end
 
 function NarrowEditor:set_focus_input_window()
-  api.nvim_set_current_win(self.input_win)
+  api.nvim_set_current_win(self.input_window.win)
 end
 
 function NarrowEditor:add_grep_result(grep_results)
@@ -252,7 +245,7 @@ function NarrowEditor:render_results()
   end
 
   self.narrow_results = final_results
-  api.nvim_buf_set_lines(self.results_buf, 0, -1, false, results)
+  api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, results)
 
   -- now add highlights
   -- garbage/naive implementation.
@@ -261,7 +254,7 @@ function NarrowEditor:render_results()
   local num_results = 0
   for row, result in ipairs(self.narrow_results) do
     if result.is_header then
-      api.nvim_buf_add_highlight(self.results_buf, -1, "NarrowHeader", row - 1, 0, -1)
+      api.nvim_buf_add_highlight(self.results_window.buf, -1, "NarrowHeader", row - 1, 0, -1)
     else
       num_results = num_results + 1
       local result_line = results[row]
@@ -271,7 +264,7 @@ function NarrowEditor:render_results()
       end
       local col_start, col_end = string.find(results[row], self.query)
       if col_start and col_end then
-        api.nvim_buf_add_highlight(self.results_buf, -1, "NarrowMatch", row - 1, col_start - 1, col_end)
+        api.nvim_buf_add_highlight(self.results_window.buf, -1, "NarrowMatch", row - 1, col_start - 1, col_end)
       end
     end
   end
@@ -280,7 +273,7 @@ function NarrowEditor:render_results()
 end
 
 function NarrowEditor:get_result()
-  local c = api.nvim_win_get_cursor(self.results_win)
+  local c = api.nvim_win_get_cursor(self.results_window.win)
   local results = self.narrow_results
   local result = results[c[1]]
 
@@ -335,7 +328,7 @@ end
 
 function NarrowEditor:on_key(key)
   local curr_win = api.nvim_get_current_win()
-  local cursor = api.nvim_win_get_cursor(self.results_win)
+  local cursor = api.nvim_win_get_cursor(self.results_window.win)
   local on_result_hovered = function(result)
     -- api.nvim_buf_clear_namespace(self.preview_buf, self.namespace_id, 0, -1)
 
@@ -359,10 +352,10 @@ function NarrowEditor:on_key(key)
 
   local schedule_hover = function(key)
     vim.defer_fn(function()
-      if self.results_buf == nil or self.results_win == nil then
+      if self.results_window.buf == nil or self.results_window == nil then
         return
       end
-      local c = api.nvim_win_get_cursor(self.results_win)
+      local c = api.nvim_win_get_cursor(self.results_window.win)
       local results = self.narrow_results
       local result = results[c[1]]
 
@@ -378,20 +371,20 @@ function NarrowEditor:on_key(key)
     end, 0)
   end
 
-  if curr_win == self.results_win then
+  if curr_win == self.results_window.win then
     if api.nvim_get_mode().mode == "n" then
       schedule_hover(key)
     end
   end
   -- early return if we arent' inserting text
   -- we should also test if we're on the query input line
-  if curr_win ~= self.input_win or api.nvim_get_mode().mode ~= "i" then
+  if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
     return
   end
 
   self.debounce_count = self.debounce_count + 1
   vim.defer_fn(function()
-    if self.results_buf == nil or self.input_buf == nil then
+    if self.results_window.buf == nil or self.input_window.buf == nil then
       return
     end
 
@@ -400,8 +393,8 @@ function NarrowEditor:on_key(key)
       return
     end
 
-    local query = api.nvim_buf_get_lines(self.input_buf, 0, 1, false)[1]
-    local prompt_text = vim.fn.prompt_getprompt(self.input_buf)
+    local query = api.nvim_buf_get_lines(self.input_window.buf, 0, 1, false)[1]
+    local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
     local _, e = string.find(query, prompt_text)
     query = query:sub(e + 1)
     self.query = query
@@ -410,14 +403,14 @@ function NarrowEditor:on_key(key)
     else
       -- clear previous results
       -- TODO: make function
-      api.nvim_buf_set_lines(self.results_buf, 0, -1, false, {})
+      api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, {})
     end
   end, 100)
 end
 
 function NarrowEditor:update_real_file()
   local current_header = ""
-  local buffer_lines = api.nvim_buf_get_lines(self.results_buf, 0, -1, false)
+  local buffer_lines = api.nvim_buf_get_lines(self.results_window.buf, 0, -1, false)
 
   if #buffer_lines - 1 ~= #self.narrow_results then
     print("validation error: number of lines were modified")
