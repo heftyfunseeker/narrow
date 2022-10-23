@@ -16,6 +16,10 @@ M.write_file_sync = function(path, data)
   return data
 end
 
+M.get_file_extension = function(file_path)
+  return file_path:match("^.+(%..+)$"):sub(2)
+end
+
 M.get_parser = function(result_header)
   -- TODO: do this correctly
   local ext_to_type = {}
@@ -24,7 +28,7 @@ M.get_parser = function(result_header)
   ext_to_type[".md"] = "markdown"
   ext_to_type[".vim"] = "vim"
 
-  local ext = result_header:match "^.+(%..+)$"
+  local ext = M.get_file_extension(result_header)
   local ft = ext_to_type[ext]
   if ft == nil then
     ft = ext:sub(2, -1)

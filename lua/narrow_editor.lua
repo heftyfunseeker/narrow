@@ -1,6 +1,7 @@
 local narrow_utils = require "narrow_utils"
 local NarrowResult = require "narrow_result"
 local Window = require "window"
+local devicons = require "nvim-web-devicons"
 
 local api = vim.api
 
@@ -231,13 +232,12 @@ function NarrowEditor:render_results()
   -- final results includes header entries to keep display lines and self lines in sync
   local final_results = {}
   local header_number = 0
-  for _, result in ipairs(self.narrow_results) do
+  for line, result in ipairs(self.narrow_results) do
     if result.header and headers_processed[result.header] == nil then
       headers_processed[result.header] = true
 
-      local header_text = "#" .. result.header
-      table.insert(results, header_text)
-      table.insert(final_results, NarrowResult:new_header(header_text, header_number))
+      table.insert(results, "")
+      table.insert(final_results, NarrowResult:new_header(result.header, header_number))
       header_number = header_number + 1
     end
     table.insert(results, result.display_text)
@@ -254,7 +254,13 @@ function NarrowEditor:render_results()
   local num_results = 0
   for row, result in ipairs(self.narrow_results) do
     if result.is_header then
-      api.nvim_buf_add_highlight(self.results_window.buf, -1, "NarrowHeader", row - 1, 0, -1)
+      local icon, hl_name = devicons.get_icon(result.text, narrow_utils.get_file_extension(result.text), { default = true })
+      local opts = {
+        virt_text = { { icon .. " ", hl_name }, { result.text, "Identifier" } },
+        virt_text_pos = 'overlay',
+        virt_text_win_col = 0,
+      }
+      api.nvim_buf_set_extmark(self.results_window.buf, self.namespace_id, row - 1, 0, opts)
     else
       num_results = num_results + 1
       local result_line = results[row]
@@ -403,6 +409,7 @@ function NarrowEditor:on_key(key)
     else
       -- clear previous results
       -- TODO: make function
+      api.nvim_buf_clear_namespace(self.results_window.buf, self.namespace_id, 0, -1)
       api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, {})
     end
   end, 100)

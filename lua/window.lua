@@ -91,7 +91,7 @@ Window.new_results_window = function()
 end
 
 Window.new_hud_window = function()
-  local window = Window:new(.65, 2, .52, .35)
+  local window = Window:new(.65, .06, .52, .35)
 
   return window
       :set_buf_option("bufhidden", "wipe")
@@ -102,7 +102,7 @@ Window.new_hud_window = function()
 end
 
 Window.new_input_window = function()
-  local window = Window:new(.35, 2, .52, 0)
+  local window = Window:new(.35, .06, .52, 0)
 
   return window
       :set_buf_option("bufhidden", "wipe")
