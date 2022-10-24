@@ -1,7 +1,8 @@
-local narrow_utils = require "narrow_utils"
-local NarrowResult = require "narrow_result"
-local Window = require "window"
-local devicons = require "nvim-web-devicons"
+local narrow_utils = require("narrow_utils")
+local NarrowResult = require("narrow_result")
+local Window = require("window")
+local Layout = require("layout")
+local devicons = require("nvim-web-devicons")
 
 local api = vim.api
 
@@ -18,10 +19,36 @@ end
 
 -- creates the results and preview buffers/windows
 function NarrowEditor:_build_layout(config)
-  -- TODO: use configuration
+  local results_window = Window
+    :new()
+    :set_buf_option("bufhidden", "wipe")
+    :set_buf_option("buftype", "nofile")
+    :set_buf_option("swapfile", false)
+    :set_border({ "", "", "", "│", "╯", "─", "╰", "│" })
+
+  local hud_window = Window
+    :new()
+    :set_buf_option("bufhidden", "wipe")
+    :set_buf_option("buftype", "nofile")
+    :set_buf_option("swapfile", false)
+    :set_border({ "", "─", "╮", "│", "", "", "", "" })
+
+  local input_window = Window
+    :new()
+    :set_buf_option("bufhidden", "wipe")
+    :set_buf_option("buftype", "prompt")
+    :set_buf_option("swapfile", false)
+    :set_border({ "╭", "─", "", "", " ", "", "", "│" })
+
+  self.layout = Layout
+    :new()
+    :set_results_window(results_window)
+    :set_hud_window(hud_window)
+    :set_input_window(input_window)
+    :render()
 
   -- create results buffer
-  self.results_window = Window.new_results_window()
+  self.results_window = results_window
 
   api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, {})
 
@@ -36,11 +63,12 @@ function NarrowEditor:_build_layout(config)
   end, self.namespace_id)
 
   -- create floating window hud
-  self.hud_window = Window.new_hud_window()
+  self.hud_window = hud_window
   self:_set_hud_text("")
 
   -- input
-  self.input_window = Window.new_input_window()
+  self.input_window = input_window
+
   api.nvim_set_current_win(self.input_window.win)
   api.nvim_win_set_buf(self.input_window.win, self.input_window.buf)
   local prompt_text = " 👉 "
@@ -52,13 +80,15 @@ end
 
 function NarrowEditor:_update_hud()
   local results = self.narrow_results
-  if #results == 0 then return end
+  if #results == 0 then
+    return
+  end
 
   local c = api.nvim_win_get_cursor(self.results_window.win)
   local result_index = c[1]
   local result = results[result_index]
   -- result headers are interleaved with result lines, so subtract the num of headers
-  -- @nicco: refactor results to point to a header and keep them separate?
+  -- @todo: refactor results to point to a header and keep them separate?
   local i = result_index
   local result_num = result_index
   -- find our header by walking backwards up the results list
@@ -69,13 +99,13 @@ function NarrowEditor:_update_hud()
     end
     i = i - 1
   end
-  -- @nicco: we need to calculate this centering
+  -- @todo: we need to calculate this centering
   local results_text = result_num .. "/" .. self.num_results
   self:_set_hud_text(results_text)
 end
 
 function NarrowEditor:_set_hud_text(display_text)
-  local hud_width = math.floor(api.nvim_get_option("columns") * .5)
+  local hud_width = math.floor(api.nvim_get_option("columns") * 0.5)
   local margin = math.ceil((hud_width - #display_text) / 2)
   local padding = string.rep(" ", margin)
   local display_text_with_padding = padding .. display_text .. padding
@@ -118,13 +148,7 @@ function NarrowEditor:_set_keymaps(config)
     ':lua require("narrow").set_focus_results_window() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
-  api.nvim_buf_set_keymap(
-    self.input_window.buf,
-    "i",
-    "<CR>",
-    '',
-    { nowait = true, noremap = false, silent = true }
-  )
+  api.nvim_buf_set_keymap(self.input_window.buf, "i", "<CR>", "", { nowait = true, noremap = false, silent = true })
   api.nvim_buf_set_keymap(
     self.results_window.buf,
     "n",
@@ -150,6 +174,7 @@ end
 
 function NarrowEditor:new(config)
   local new_obj = {
+    layout = nil,
     hud_window = nil,
     input_window = nil,
     results_window = nil,
@@ -166,8 +191,8 @@ function NarrowEditor:new(config)
     -- restore user config
     wo = {
       number = vim.wo.number,
-      relativenumber = vim.wo.relativenumber
-    }
+      relativenumber = vim.wo.relativenumber,
+    },
   }
   self.__index = self
   setmetatable(new_obj, self)
@@ -184,7 +209,7 @@ end
 
 function NarrowEditor:drop()
   -- api.nvim_buf_delete(self.preview_buf, {})
-  -- @nicco: window should implement drop
+  -- @todo: window should implement drop
   api.nvim_buf_delete(self.results_window.buf, {})
   api.nvim_buf_delete(self.hud_window.buf, {})
   api.nvim_buf_delete(self.input_window.buf, { force = true })
@@ -192,6 +217,7 @@ function NarrowEditor:drop()
   self.preview_buf = nil
   self.input_window.buf = nil
   self.hud_window = nil
+  self.layout = nil
   self.narrow_results = {}
   self.current_header = ""
 
@@ -200,10 +226,9 @@ function NarrowEditor:drop()
 end
 
 function NarrowEditor:resize()
-  print("called resize")
-  self.results_window:resize()
-  self.input_window:resize()
-  self.hud_window:resize()
+  if self.layout then
+    self.layout:render()
+  end
 end
 
 function NarrowEditor:set_focus_results_window()
@@ -254,10 +279,14 @@ function NarrowEditor:render_results()
   local num_results = 0
   for row, result in ipairs(self.narrow_results) do
     if result.is_header then
-      local icon, hl_name = devicons.get_icon(result.text, narrow_utils.get_file_extension(result.text), { default = true })
+      local icon, hl_name = devicons.get_icon(
+        result.text,
+        narrow_utils.get_file_extension(result.text),
+        { default = true }
+      )
       local opts = {
         virt_text = { { icon .. " ", hl_name }, { result.text, "Identifier" } },
-        virt_text_pos = 'overlay',
+        virt_text_pos = "overlay",
         virt_text_win_col = 0,
       }
       api.nvim_buf_set_extmark(self.results_window.buf, self.namespace_id, row - 1, 0, opts)

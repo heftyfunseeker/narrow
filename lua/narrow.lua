@@ -13,8 +13,8 @@ M.open = function()
   api.nvim_command("hi def link HUD Error")
   api.nvim_command("hi def link Query Todo")
 
-  api.nvim_set_hl(0, "FloatBorder", {link="Function"})
-  api.nvim_set_hl(0, "NormalFloat", {link="Normal"})
+  api.nvim_set_hl(0, "FloatBorder", { link = "Function" })
+  api.nvim_set_hl(0, "NormalFloat", { link = "Normal" })
 
   narrow_editor = NarrowEditor:new({})
 

@@ -17,6 +17,9 @@ M.write_file_sync = function(path, data)
 end
 
 M.get_file_extension = function(file_path)
+  if file_path == nil then
+    return nil
+  end
   return file_path:match("^.+(%..+)$"):sub(2)
 end
 

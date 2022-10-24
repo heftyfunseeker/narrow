@@ -8,7 +8,7 @@ function NarrowResult:new(raw_line)
       row = tonumber(row),
       column = tonumber(column),
       text = text,
-      display_text = string.format("%3d:%3d:%s", tonumber(row), tonumber(column), text)
+      display_text = string.format("%3d:%3d:%s", tonumber(row), tonumber(column), text),
     }
     self.__index = self
     return setmetatable(new_obj, self)
