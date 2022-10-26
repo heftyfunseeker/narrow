@@ -445,40 +445,31 @@ function NarrowEditor:on_key(key)
 end
 
 function NarrowEditor:update_real_file()
-  local current_header = ""
   local buffer_lines = api.nvim_buf_get_lines(self.results_window.buf, 0, -1, false)
 
-  if #buffer_lines - 1 ~= #self.narrow_results then
-    print("validation error: number of lines were modified")
+  if #buffer_lines ~= #self.narrow_results then
+    print("validation error: number of lines were modified " .. #buffer_lines .. " ~= " .. #self.narrow_results)
     return
   end
 
   local changes = {}
-  for index = 2, #buffer_lines, 1 do
-    local display_text = buffer_lines[index]
-    local narrow_result = self.narrow_results[index - 1]
-    if narrow_result.is_header then
-      if narrow_result.text == display_text then
-        -- cache the header for validations across currently processing results
-        current_header = narrow_result.text
+  for line, result in ipairs(self.narrow_results) do
+    local display_text = buffer_lines[line]
+    local narrow_result = self.narrow_results[line]
+    if narrow_result.is_header ~= true and display_text ~= narrow_result.display_text then
+      local row, col, text = string.match(display_text, "[%s]*(%d+):[%s]*(%d+):(.*)")
+      -- validate the row and col are the same
+      if tonumber(row) == narrow_result.row and tonumber(col) == narrow_result.column then
+        table.insert(changes, { narrow_result = narrow_result, changed_text = text })
       else
-        print("bad header: couldn't find: " .. display_text)
+        print("validation error: row and column were modified")
         return
-      end
-    else
-      if display_text ~= narrow_result.display_text then
-        local row, col, text = string.match(display_text, "[%s]*(%d+):[%s]*(%d+):(.*)")
-
-        -- validate the row and col are the same
-        if tonumber(row) == narrow_result.row and tonumber(col) == narrow_result.column then
-          table.insert(changes, { narrow_result = narrow_result, changed_text = text })
-        else
-          print("validation error: row and column were modified")
-          return
-        end
       end
     end
   end
+
+  -- todo pop-up confirmation modal instead
+  print("narrow: applying " .. #changes .. " changes to real files")
 
   -- TODO: batch these changes by header to avoid the io thrashing
   for _, change in ipairs(changes) do
@@ -487,6 +478,8 @@ function NarrowEditor:update_real_file()
     file_lines[nr.row] = change.changed_text
     narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
   end
+
+  print("narrow: finished applying " .. #changes .. " changes")
 end
 
 return NarrowEditor

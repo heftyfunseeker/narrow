@@ -20,7 +20,10 @@ M.get_file_extension = function(file_path)
   if file_path == nil then
     return nil
   end
-  return file_path:match("^.+(%..+)$"):sub(2)
+  local ext = file_path:match("^.+(%..+)$")
+  if ext then
+    ext:sub(2)
+  end
 end
 
 M.get_parser = function(result_header)
