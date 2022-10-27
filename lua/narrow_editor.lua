@@ -87,7 +87,7 @@ function NarrowEditor:_update_hud()
     i = i - 1
   end
 
-  if self.num_resuls ~= nil and result_num ~= nil then
+  if self.num_results ~= nil and result_num ~= nil then
     local results_text = result_num .. "/" .. self.num_results
     self:_set_hud_text(results_text)
   end
@@ -184,8 +184,14 @@ end
 
 function NarrowEditor:drop()
   self.results_window:drop()
+  self.results_window = nil
+
   self.input_window:drop()
+  self.input_window = nil
+
   self.hud_window:drop()
+  self.hud_window = nil
+
   self.layout = nil
   self.narrow_results = {}
   self.current_header = ""
@@ -330,6 +336,26 @@ function NarrowEditor:search(query_term)
   vim.loop.read_start(stderr, onread)
 end
 
+function NarrowEditor:schedule_result_hovered()
+  vim.defer_fn(function()
+    if self.results_window == nil then
+      return
+    end
+
+    local c = api.nvim_win_get_cursor(self.results_window.win)
+    local result =  self.narrow_results[c[1]]
+    if result == nil or result.is_header then
+      return
+    end
+
+    self:on_result_hovered(result)
+  end, 0)
+end
+
+function NarrowEditor:on_result_hovered(_result)
+  self:_update_hud()
+end
+
 function NarrowEditor:on_key(key)
   local escape_key = "\27"
   if key == escape_key then
@@ -338,16 +364,20 @@ function NarrowEditor:on_key(key)
 
   local curr_win = api.nvim_get_current_win()
 
-  self:_update_hud()
+  if curr_win == self.results_window.win then
+    if api.nvim_get_mode().mode ~= "i" then
+      self:schedule_result_hovered()
+    end
+  end
 
   -- early return if we arent' making a query
-  if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
+  if curr_win ~= self.input_window.win and api.nvim_get_mode().mode ~= "i" then
     return
   end
 
   self.debounce_count = self.debounce_count + 1
   vim.defer_fn(function()
-    if self.results_window.buf == nil or self.input_window.buf == nil then
+    if self.results_window == nil or self.input_window == nil then
       return
     end
 
