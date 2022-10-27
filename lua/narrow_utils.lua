@@ -1,5 +1,15 @@
 local M = {}
 
+
+M.string_to_lines = function(str)
+  local vals = vim.split(str, "\n")
+  local lines = {}
+  for _, line in pairs(vals) do
+    table.insert(lines, line)
+  end
+  return lines
+end
+
 M.read_file_sync = function(path)
   local fd = assert(vim.loop.fs_open(path, "r", 438))
   local stat = assert(vim.loop.fs_fstat(fd))

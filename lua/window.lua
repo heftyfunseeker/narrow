@@ -73,4 +73,10 @@ function Window:get_lines(start_line, end_line)
   return api.nvim_buf_get_lines(self.buf, start_line, end_line, true)
 end
 
+function Window:drop()
+  api.nvim_buf_delete(self.buf, { force = true })
+  self.buf = nil
+  self.window = nil
+end
+
 return Window

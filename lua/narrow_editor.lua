@@ -8,15 +8,6 @@ local api = vim.api
 
 local NarrowEditor = {}
 
-local function string_to_lines(str)
-  local vals = vim.split(str, "\n")
-  local lines = {}
-  for _, line in pairs(vals) do
-    table.insert(lines, line)
-  end
-  return lines
-end
-
 -- creates the results and preview buffers/windows
 function NarrowEditor:_build_layout(config)
   local results_window = Window
@@ -47,9 +38,7 @@ function NarrowEditor:_build_layout(config)
       :set_input_window(input_window)
       :render()
 
-  -- create results buffer
   self.results_window = results_window
-
   self.results_window:set_lines(0, -1, {})
 
   api.nvim_buf_attach(self.results_window.buf, false, {
@@ -86,22 +75,22 @@ function NarrowEditor:_update_hud()
 
   local c = api.nvim_win_get_cursor(self.results_window.win)
   local result_index = c[1]
-  local result = results[result_index]
   -- result headers are interleaved with result lines, so subtract the num of headers
-  -- @todo: refactor results to point to a header and keep them separate?
   local i = result_index
   local result_num = result_index
   -- find our header by walking backwards up the results list
   while i > 0 do
-    if results[i].is_header then
+    if results[i] ~= nil and results[i].is_header then
       result_num = result_index - results[i].header_number - 1
       break
     end
     i = i - 1
   end
-  -- @todo: we need to calculate this centering
-  local results_text = result_num .. "/" .. self.num_results
-  self:_set_hud_text(results_text)
+
+  if self.num_resuls ~= nil and result_num ~= nil then
+    local results_text = result_num .. "/" .. self.num_results
+    self:_set_hud_text(results_text)
+  end
 end
 
 function NarrowEditor:_set_hud_text(display_text)
@@ -111,18 +100,6 @@ function NarrowEditor:_set_hud_text(display_text)
   local display_text_with_padding = padding .. display_text .. padding
   self.hud_window:set_lines(0, -1, { display_text_with_padding })
   api.nvim_buf_add_highlight(self.hud_window.buf, -1, "HUD", 0, 0, -1)
-end
-
-function NarrowEditor:_define_signs(config)
-  api.nvim_command(":sign define narrow_result_pointer text=> texthl=Directory")
-end
-
-function NarrowEditor:_apply_signs()
-  -- local c = api.nvim_win_get_cursor(self.results_window.win)
-  --
-  -- local buf_name = api.nvim_buf_get_name(self.results_window.buf)
-  -- api.nvim_command(":sign unplace * file="..buf_name)
-  -- api.nvim_command(":sign place 1 line="..tostring(c[1]).." name=narrow_result_pointer file="..buf_name)
 end
 
 -- should we instead expose se.get_results_buf()?
@@ -181,7 +158,6 @@ function NarrowEditor:new(config)
 
     -- state ---------
     namespace_id = api.nvim_create_namespace("narrow"),
-    preview_buf_query_id = api.nvim_create_namespace("narrow-query"),
     narrow_results = {},
     query = {},
     debounce_count = 0,
@@ -202,21 +178,14 @@ function NarrowEditor:new(config)
 
   new_obj:_build_layout(config)
   new_obj:_set_keymaps(config)
-  new_obj:_define_signs(config)
 
   return new_obj
 end
 
 function NarrowEditor:drop()
-  -- api.nvim_buf_delete(self.preview_buf, {})
-  -- @todo: window should implement drop
-  api.nvim_buf_delete(self.results_window.buf, {})
-  api.nvim_buf_delete(self.hud_window.buf, {})
-  api.nvim_buf_delete(self.input_window.buf, { force = true })
-  self.results_window.buf = nil
-  self.preview_buf = nil
-  self.input_window.buf = nil
-  self.hud_window = nil
+  self.results_window:drop()
+  self.input_window:drop()
+  self.hud_window:drop()
   self.layout = nil
   self.narrow_results = {}
   self.current_header = ""
@@ -229,6 +198,21 @@ function NarrowEditor:resize()
   if self.layout then
     self.layout:render()
   end
+end
+
+function NarrowEditor:get_result()
+  local c = api.nvim_win_get_cursor(self.results_window.win)
+  local results = self.narrow_results
+  local result = results[c[1]]
+
+  if result == nil then
+    return nil
+  end
+  if result.is_header then
+    return nil
+  end
+
+  return result
 end
 
 function NarrowEditor:set_focus_results_window()
@@ -257,7 +241,7 @@ function NarrowEditor:render_results()
   -- final results includes header entries to keep display lines and self lines in sync
   local final_results = {}
   local header_number = 0
-  for line, result in ipairs(self.narrow_results) do
+  for _, result in ipairs(self.narrow_results) do
     if result.header and headers_processed[result.header] == nil then
       headers_processed[result.header] = true
 
@@ -307,21 +291,6 @@ function NarrowEditor:render_results()
   self:_update_hud()
 end
 
-function NarrowEditor:get_result()
-  local c = api.nvim_win_get_cursor(self.results_window.win)
-  local results = self.narrow_results
-  local result = results[c[1]]
-
-  if result == nil then
-    return nil
-  end
-  if result.is_header then
-    return nil
-  end
-
-  return result
-end
-
 function NarrowEditor:search(query_term)
   -- clear previous results out
   self.narrow_results = {}
@@ -362,57 +331,16 @@ function NarrowEditor:search(query_term)
 end
 
 function NarrowEditor:on_key(key)
+  local escape_key = "\27"
+  if key == escape_key then
+    return
+  end
+
   local curr_win = api.nvim_get_current_win()
-  local cursor = api.nvim_win_get_cursor(self.results_window.win)
-  local on_result_hovered = function(result)
-    -- api.nvim_buf_clear_namespace(self.preview_buf, self.namespace_id, 0, -1)
 
-    self:_update_hud()
+  self:_update_hud()
 
-    -- if result and result.header and self.current_header ~= result.header then
-    --   local file_str = narrow_utils.read_file_sync(result.header)
-    --   self.current_header = result.header
-    --   self.preview_lines = string_to_lines(file_str)
-    --   api.nvim_buf_set_lines(self.preview_buf, 0, -1, false, self.preview_lines)
-    --   narrow_utils.hl_buffer(self, result.header)
-    --   api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
-    -- elseif result and result.header then
-    --   if result.row < #self.preview_lines then
-    --     api.nvim_win_set_cursor(self.preview_win, { result.row, 0 })
-    --     self:_apply_signs()
-    --     api.nvim_buf_add_highlight(self.preview_buf, self.namespace_id, "NarrowMatch", result.row - 1, result.column - 1, result.column + #self.query - 1)
-    --   end
-    -- end
-  end
-
-  local schedule_hover = function(key)
-    vim.defer_fn(function()
-      if self.results_window.buf == nil or self.results_window == nil then
-        return
-      end
-      local c = api.nvim_win_get_cursor(self.results_window.win)
-      local results = self.narrow_results
-      local result = results[c[1]]
-
-      if result == nil then
-        return
-      end
-      if result.is_header then
-        return
-      end
-      if result then
-        on_result_hovered(result)
-      end
-    end, 0)
-  end
-
-  if curr_win == self.results_window.win then
-    if api.nvim_get_mode().mode == "n" then
-      schedule_hover(key)
-    end
-  end
-  -- early return if we arent' inserting text
-  -- we should also test if we're on the query input line
+  -- early return if we arent' making a query
   if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
     return
   end
@@ -441,7 +369,7 @@ function NarrowEditor:on_key(key)
       api.nvim_buf_clear_namespace(self.results_window.buf, self.namespace_id, 0, -1)
       self.results_window:set_lines(0, -1, {})
     end
-  end, 100)
+  end, 5)
 end
 
 function NarrowEditor:update_real_file()
@@ -453,7 +381,7 @@ function NarrowEditor:update_real_file()
   end
 
   local changes = {}
-  for line, result in ipairs(self.narrow_results) do
+  for line, _ in ipairs(self.narrow_results) do
     local display_text = buffer_lines[line]
     local narrow_result = self.narrow_results[line]
     if narrow_result.is_header ~= true and display_text ~= narrow_result.display_text then
@@ -474,7 +402,7 @@ function NarrowEditor:update_real_file()
   -- TODO: batch these changes by header to avoid the io thrashing
   for _, change in ipairs(changes) do
     local nr = change.narrow_result
-    local file_lines = string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
+    local file_lines = narrow_utils.string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
     file_lines[nr.row] = change.changed_text
     narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
   end
