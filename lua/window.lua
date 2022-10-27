@@ -65,4 +65,12 @@ function Window:render()
   return self
 end
 
+function Window:set_lines(start_line, end_line, replacement)
+  api.nvim_buf_set_lines(self.buf, start_line, end_line, true, replacement)
+end
+
+function Window:get_lines(start_line, end_line)
+  return api.nvim_buf_get_lines(self.buf, start_line, end_line, true)
+end
+
 return Window

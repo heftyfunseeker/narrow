@@ -20,37 +20,37 @@ end
 -- creates the results and preview buffers/windows
 function NarrowEditor:_build_layout(config)
   local results_window = Window
-    :new()
-    :set_buf_option("bufhidden", "wipe")
-    :set_buf_option("buftype", "nofile")
-    :set_buf_option("swapfile", false)
-    :set_border({ "", "", "", "│", "╯", "─", "╰", "│" })
+      :new()
+      :set_buf_option("bufhidden", "wipe")
+      :set_buf_option("buftype", "nofile")
+      :set_buf_option("swapfile", false)
+      :set_border({ "", "", "", "│", "╯", "─", "╰", "│" })
 
   local hud_window = Window
-    :new()
-    :set_buf_option("bufhidden", "wipe")
-    :set_buf_option("buftype", "nofile")
-    :set_buf_option("swapfile", false)
-    :set_border({ "", "─", "╮", "│", "", "", "", "" })
+      :new()
+      :set_buf_option("bufhidden", "wipe")
+      :set_buf_option("buftype", "nofile")
+      :set_buf_option("swapfile", false)
+      :set_border({ "", "─", "╮", "│", "", "", "", "" })
 
   local input_window = Window
-    :new()
-    :set_buf_option("bufhidden", "wipe")
-    :set_buf_option("buftype", "prompt")
-    :set_buf_option("swapfile", false)
-    :set_border({ "╭", "─", "", "", " ", "", "", "│" })
+      :new()
+      :set_buf_option("bufhidden", "wipe")
+      :set_buf_option("buftype", "prompt")
+      :set_buf_option("swapfile", false)
+      :set_border({ "╭", "─", "", "", " ", "", "", "│" })
 
   self.layout = Layout
-    :new()
-    :set_results_window(results_window)
-    :set_hud_window(hud_window)
-    :set_input_window(input_window)
-    :render()
+      :new()
+      :set_results_window(results_window)
+      :set_hud_window(hud_window)
+      :set_input_window(input_window)
+      :render()
 
   -- create results buffer
   self.results_window = results_window
 
-  api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, {})
+  self.results_window:set_lines(0, -1, {})
 
   api.nvim_buf_attach(self.results_window.buf, false, {
     on_detach = function(detach_str, buf_handle)
@@ -109,7 +109,7 @@ function NarrowEditor:_set_hud_text(display_text)
   local margin = math.ceil((hud_width - #display_text) / 2)
   local padding = string.rep(" ", margin)
   local display_text_with_padding = padding .. display_text .. padding
-  api.nvim_buf_set_lines(self.hud_window.buf, 0, -1, false, { display_text_with_padding })
+  self.hud_window:set_lines(0, -1, { display_text_with_padding })
   api.nvim_buf_add_highlight(self.hud_window.buf, -1, "HUD", 0, 0, -1)
 end
 
@@ -270,7 +270,7 @@ function NarrowEditor:render_results()
   end
 
   self.narrow_results = final_results
-  api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, results)
+  self.results_window:set_lines(0, -1, results)
 
   -- now add highlights
   -- garbage/naive implementation.
@@ -428,7 +428,7 @@ function NarrowEditor:on_key(key)
       return
     end
 
-    local query = api.nvim_buf_get_lines(self.input_window.buf, 0, 1, false)[1]
+    local query = self.input_window:get_lines(0, 1)[1]
     local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
     local _, e = string.find(query, prompt_text)
     query = query:sub(e + 1)
@@ -439,13 +439,13 @@ function NarrowEditor:on_key(key)
       -- clear previous results
       -- TODO: make function
       api.nvim_buf_clear_namespace(self.results_window.buf, self.namespace_id, 0, -1)
-      api.nvim_buf_set_lines(self.results_window.buf, 0, -1, false, {})
+      self.results_window:set_lines(0, -1, {})
     end
   end, 100)
 end
 
 function NarrowEditor:update_real_file()
-  local buffer_lines = api.nvim_buf_get_lines(self.results_window.buf, 0, -1, false)
+  local buffer_lines = self.results_window:get_lines(0, -1)
 
   if #buffer_lines ~= #self.narrow_results then
     print("validation error: number of lines were modified " .. #buffer_lines .. " ~= " .. #self.narrow_results)
