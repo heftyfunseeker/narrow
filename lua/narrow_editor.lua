@@ -1,7 +1,9 @@
 local narrow_utils = require("narrow_utils")
 local NarrowResult = require("narrow_result")
 local Window = require("window")
-local Layout = require("layout")
+local Layout = require("gui.layout")
+local Canvas = require("gui.canvas")
+local Text = require("gui.text")
 local devicons = require("nvim-web-devicons")
 
 local api = vim.api
@@ -94,10 +96,6 @@ function NarrowEditor:_update_hud()
 end
 
 function NarrowEditor:_set_hud_text(display_text)
-  local hud_width = math.floor(api.nvim_get_option("columns") * 0.5)
-  local margin = math.ceil((hud_width - #display_text) / 2)
-  local padding = string.rep(" ", margin)
-  local display_text_with_padding = padding .. display_text .. padding
   self.hud_window:set_lines(0, -1, { display_text_with_padding })
   api.nvim_buf_add_highlight(self.hud_window.buf, -1, "HUD", 0, 0, -1)
 end
@@ -161,9 +159,6 @@ function NarrowEditor:new(config)
     narrow_results = {},
     query = {},
     debounce_count = 0,
-    current_header = "",
-    current_hl = nil,
-    current_parser = nil,
     -- restore user config
     wo = {
       number = vim.wo.number,
@@ -194,7 +189,6 @@ function NarrowEditor:drop()
 
   self.layout = nil
   self.narrow_results = {}
-  self.current_header = ""
 
   vim.wo.number = self.wo.number
   vim.wo.relativenumber = self.wo.relativenumber
@@ -207,14 +201,14 @@ function NarrowEditor:resize()
 end
 
 function NarrowEditor:get_result()
-  local c = api.nvim_win_get_cursor(self.results_window.win)
-  local results = self.narrow_results
-  local result = results[c[1]]
+  local entry = self.results_window:get_entry_at_cursor()
+  if entry == nil or entry[1] == nil then return end
+
+  entry = entry[1]
+  print("entry: " .. vim.inspect(entry))
+  local result = self.entry_id_to_result[entry[1]]
 
   if result == nil then
-    return nil
-  end
-  if result.is_header then
     return nil
   end
 
@@ -242,59 +236,53 @@ function NarrowEditor:add_grep_result(grep_results)
 end
 
 function NarrowEditor:render_results()
+  local canvas = Canvas:new()
+
   local headers_processed = {}
-  local results = {}
-  -- final results includes header entries to keep display lines and self lines in sync
-  local final_results = {}
-  local header_number = 0
+  self.entry_id_to_result = {}
+
+  local row = 0
   for _, result in ipairs(self.narrow_results) do
     if result.header and headers_processed[result.header] == nil then
       headers_processed[result.header] = true
 
-      table.insert(results, "")
-      table.insert(final_results, NarrowResult:new_header(result.header, header_number))
-      header_number = header_number + 1
-    end
-    table.insert(results, result.display_text)
-    table.insert(final_results, result)
-  end
-
-  self.narrow_results = final_results
-  self.results_window:set_lines(0, -1, results)
-
-  -- now add highlights
-  -- garbage/naive implementation.
-  -- Doesnt handle single line with multiple matches,
-  -- preserve case sensitivity, or patterns
-  local num_results = 0
-  for row, result in ipairs(self.narrow_results) do
-    if result.is_header then
       local icon, hl_name = devicons.get_icon(
-        result.text,
-        narrow_utils.get_file_extension(result.text),
+        result.header,
+        narrow_utils.get_file_extension(result.header),
         { default = true }
       )
-      local opts = {
-        virt_text = { { icon .. " ", hl_name }, { result.text, "Identifier" } },
-        virt_text_pos = "overlay",
-        virt_text_win_col = 0,
-      }
-      api.nvim_buf_set_extmark(self.results_window.buf, self.namespace_id, row - 1, 0, opts)
-    else
-      num_results = num_results + 1
-      local result_line = results[row]
-      if result_line == nil then
-        print("result line is nil with row: " .. row)
-        return
-      end
-      local col_start, col_end = string.find(results[row], self.query)
-      if col_start and col_end then
-        api.nvim_buf_add_highlight(self.results_window.buf, -1, "NarrowMatch", row - 1, col_start - 1, col_end)
-      end
+      Text:new()
+          :set_text(icon)
+          :set_pos(0, row)
+          :apply_style(Style.types.virtual_text, hl_name)
+          :render(canvas)
+
+      Text:new()
+          :set_text(" " .. result.header)
+          :set_pos(1, row)
+          :apply_style(Style.types.virtual_text, "NarrowHeader")
+          :render(canvas)
+
+      row = row + 1
     end
+
+    Text:new()
+        :set_text(result.entry_header)
+        :set_pos(0, row)
+        :apply_style(Style.types.virtual_text, "Comment")
+        :mark_entry(row) -- mark this as a selectable entry
+        :render(canvas)
+
+    Text:new()
+        :set_text(result.entry_text)
+        :set_pos(string.len(result.entry_header) + 1, row)
+        :render(canvas)
+
+    self.entry_id_to_result[row] = result
+    row = row + 1
   end
-  self.num_results = num_results
-  self:_update_hud()
+
+  canvas:render_to_window(self.results_window)
 end
 
 function NarrowEditor:search(query_term)
@@ -303,6 +291,11 @@ function NarrowEditor:search(query_term)
 
   local stdout = vim.loop.new_pipe(false)
   local stderr = vim.loop.new_pipe(false)
+
+  if Handle ~= nil then
+      Handle:close()
+      Handle = nil
+  end
 
   Handle = vim.loop.spawn(
     "rg",
@@ -317,6 +310,7 @@ function NarrowEditor:search(query_term)
       stdout:close()
       stderr:close()
       Handle:close()
+      Handle = nil
 
       self:render_results()
     end)
@@ -343,7 +337,7 @@ function NarrowEditor:schedule_result_hovered()
     end
 
     local c = api.nvim_win_get_cursor(self.results_window.win)
-    local result =  self.narrow_results[c[1]]
+    local result = self.narrow_results[c[1]]
     if result == nil or result.is_header then
       return
     end
@@ -403,6 +397,9 @@ function NarrowEditor:on_key(key)
 end
 
 function NarrowEditor:update_real_file()
+  if true then return end
+
+  -- fix narrow_result format below
   local buffer_lines = self.results_window:get_lines(0, -1)
 
   if #buffer_lines ~= #self.narrow_results then

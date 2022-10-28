@@ -37,7 +37,10 @@ function Layout:render()
   local results_pos_y = math.max(math.floor(results_line_percent * lines), 1)
   local results_height = lines - results_pos_y - 1
 
-  self.results_window:set_pos(0, results_pos_y):set_dimensions(columns, results_height):render()
+  self.results_window
+      :set_pos(0, results_pos_y)
+      :set_dimensions(columns, results_height)
+      :render()
 
   -- input window
   local input_border_chars = 4
@@ -45,10 +48,16 @@ function Layout:render()
   local input_width = math.max(math.floor(0.35 * columns), 1)
   local input_height = 2
 
-  self.input_window:set_pos(0, input_pos_y):set_dimensions(input_width, input_height):render()
+  self.input_window
+      :set_pos(0, input_pos_y)
+      :set_dimensions(input_width, input_height)
+      :render()
 
-  local hud_width = math.max(math.floor(0.65 * columns), 1)
-  self.hud_window:set_pos(input_width + 1, input_pos_y):set_dimensions(hud_width, input_height):render()
+  local hud_width = columns - input_width - 2
+  self.hud_window
+      :set_pos(input_width + input_border_chars, input_pos_y)
+      :set_dimensions(hud_width, input_height)
+      :render()
 
   return self
 end

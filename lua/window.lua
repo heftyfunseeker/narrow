@@ -1,6 +1,11 @@
 local api = vim.api
 
+-- this is really a canvas, or the actual draw api :P
 Window = {}
+Window.__index = Window
+
+local namespace_id = api.nvim_create_namespace("narrow/window")
+local entry_namespace_id = api.nvim_create_namespace("narrow/window/entry")
 
 function Window:new()
   local new_obj = {
@@ -16,8 +21,13 @@ function Window:new()
     buf = nil,
     win = nil,
   }
-  self.__index = self
   return setmetatable(new_obj, self)
+end
+
+function Window:drop()
+  api.nvim_buf_delete(self.buf, { force = true })
+  self.buf = nil
+  self.window = nil
 end
 
 function Window:set_pos(col, row)
@@ -73,10 +83,36 @@ function Window:get_lines(start_line, end_line)
   return api.nvim_buf_get_lines(self.buf, start_line, end_line, true)
 end
 
-function Window:drop()
-  api.nvim_buf_delete(self.buf, { force = true })
-  self.buf = nil
-  self.window = nil
+function Window:add_highlight(hl_name, pos)
+  -- @todo: namespaces
+  api.nvim_buf_add_highlight(self.buf, -1, hl_name, pos.row, pos.col_start, pos.col_end)
+end
+
+function Window:add_virtual_text(text, hl_name, pos)
+  local opts = {
+    virt_text = { { text, hl_name } },
+    virt_text_pos = "overlay",
+    strict = false,
+    virt_text_win_col = pos.col,
+  }
+  api.nvim_buf_set_extmark(self.buf, namespace_id, pos.row, pos.col, opts)
+end
+
+function Window:add_entry(entry_id, pos)
+  local opts = {
+    virt_text = { },
+    id = entry_id,
+    virt_text_pos = "overlay",
+    strict = false,
+  }
+  api.nvim_buf_set_extmark(self.buf, entry_namespace_id, pos.row, 0, opts)
+end
+
+-- List of [extmark_id, row, col] tuples in "traversal order".
+function Window:get_entry_at_cursor()
+  local row = api.nvim_win_get_cursor(self.win)[1] - 1
+  -- we could eventually support entry
+  return api.nvim_buf_get_extmarks(self.buf, entry_namespace_id, { row, 0 }, { row, -1 }, {limit = 1})
 end
 
 return Window
