@@ -60,7 +60,7 @@ function Canvas:render_to_window(window)
     end
   end
 
-  window:set_lines(0, -1, render_lines)
+  window:set_lines(render_lines)
 
   -- apply styles
   for _, style in ipairs(self.styles) do

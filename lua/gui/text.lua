@@ -22,8 +22,8 @@ function Text:set_text(text)
   return self
 end
 
-function Text:apply_style(type, hl_name)
-  self.style = { type = type, hl_name = hl_name }
+function Text:apply_style(type, props)
+  self.style = { type = type, props = props }
 
   return self
 end
@@ -66,20 +66,23 @@ function Text:render(canvas)
 end
 
 function Text:_build_style()
+  local props = self.style.props
+
   if self.style.type == Style.types.highlight then
     local hl_pos = {
       row = self.row,
       col_start = self.col,
       col_end = string.len(self.text)
     }
-    return Style:new_hl(self.style.hl_name, hl_pos)
+    return Style:new_hl(props.hl_name, hl_pos)
   end
 
   local virtual_text_pos = {
+    pos_type = props.pos_type,
     row = self.row,
     col = self.col,
   }
-  return Style:new_virtual_text(self.text, self.style.hl_name, virtual_text_pos)
+  return Style:new_virtual_text(self.text, props.hl_name, virtual_text_pos)
 end
 
 function Text:_build_entry()

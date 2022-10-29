@@ -75,11 +75,18 @@ function Window:render()
   return self
 end
 
-function Window:set_lines(start_line, end_line, replacement)
-  api.nvim_buf_set_lines(self.buf, start_line, end_line, true, replacement)
+function Window:set_lines(lines)
+  self.lines = lines
+  api.nvim_buf_set_lines(self.buf, 0, -1, true, lines)
 end
 
-function Window:get_lines(start_line, end_line)
+-- returns the lines that were used in the last call to set_lines
+-- use get_buffer_lines to get currently drawn lines
+function Window:get_lines()
+  return self.lines
+end
+
+function Window:get_buffer_lines(start_line, end_line)
   return api.nvim_buf_get_lines(self.buf, start_line, end_line, true)
 end
 
@@ -91,7 +98,7 @@ end
 function Window:add_virtual_text(text, hl_name, pos)
   local opts = {
     virt_text = { { text, hl_name } },
-    virt_text_pos = "overlay",
+    virt_text_pos = pos.pos_type,
     strict = false,
     virt_text_win_col = pos.col,
   }
@@ -100,7 +107,7 @@ end
 
 function Window:add_entry(entry_id, pos)
   local opts = {
-    virt_text = { },
+    virt_text = {},
     id = entry_id,
     virt_text_pos = "overlay",
     strict = false,
@@ -111,8 +118,12 @@ end
 -- List of [extmark_id, row, col] tuples in "traversal order".
 function Window:get_entry_at_cursor()
   local row = api.nvim_win_get_cursor(self.win)[1] - 1
+  return self:get_entry_at_row(row)
+end
+
+function Window:get_entry_at_row(row)
   -- we could eventually support entry
-  return api.nvim_buf_get_extmarks(self.buf, entry_namespace_id, { row, 0 }, { row, -1 }, {limit = 1})
+  return api.nvim_buf_get_extmarks(self.buf, entry_namespace_id, { row, 0 }, { row, -1 }, { limit = 1 })[1]
 end
 
 function Window:get_all_entries()

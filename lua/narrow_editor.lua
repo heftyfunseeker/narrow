@@ -41,7 +41,7 @@ function NarrowEditor:_build_layout(config)
       :render()
 
   self.results_window = results_window
-  self.results_window:set_lines(0, -1, {})
+  self.results_window:set_lines({})
 
   api.nvim_buf_attach(self.results_window.buf, false, {
     on_detach = function(detach_str, buf_handle)
@@ -96,7 +96,7 @@ function NarrowEditor:_update_hud()
 end
 
 function NarrowEditor:_set_hud_text(display_text)
-  self.hud_window:set_lines(0, -1, { display_text_with_padding })
+  self.hud_window:set_lines({ display_text_with_padding })
   api.nvim_buf_add_highlight(self.hud_window.buf, -1, "HUD", 0, 0, -1)
 end
 
@@ -202,9 +202,8 @@ end
 
 function NarrowEditor:get_result()
   local entry = self.results_window:get_entry_at_cursor()
-  if entry == nil or entry[1] == nil then return end
+  if entry == nil then return end
 
-  entry = entry[1]
   print("entry: " .. vim.inspect(entry))
   local result = self.entry_id_to_result[entry[1]]
 
@@ -254,13 +253,13 @@ function NarrowEditor:render_results()
       Text:new()
           :set_text(icon)
           :set_pos(0, row)
-          :apply_style(Style.types.virtual_text, hl_name)
+          :apply_style(Style.types.virtual_text, { hl_name = hl_name, pos_type = "overlay" })
           :render(canvas)
 
       Text:new()
           :set_text(" " .. result.header)
           :set_pos(1, row)
-          :apply_style(Style.types.virtual_text, "NarrowHeader")
+          :apply_style(Style.types.virtual_text, { hl_name = "NarrowHeader", pos_type = "overlay" })
           :render(canvas)
 
       row = row + 1
@@ -269,8 +268,8 @@ function NarrowEditor:render_results()
     Text:new()
         :set_text(result.entry_header)
         :set_pos(0, row)
-        :apply_style(Style.types.virtual_text, "Comment")
-        :mark_entry(row) -- mark this as a selectable entry
+        :apply_style(Style.types.virtual_text, { hl_name = "Comment" })
+        :mark_entry(row)-- mark this as a selectable entry
         :render(canvas)
 
     Text:new()
@@ -293,8 +292,8 @@ function NarrowEditor:search(query_term)
   local stderr = vim.loop.new_pipe(false)
 
   if Handle ~= nil then
-      Handle:close()
-      Handle = nil
+    Handle:close()
+    Handle = nil
   end
 
   Handle = vim.loop.spawn(
@@ -380,7 +379,7 @@ function NarrowEditor:on_key(key)
       return
     end
 
-    local query = self.input_window:get_lines(0, 1)[1]
+    local query = self.input_window:get_buffer_lines(0, 1)[1]
     local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
     local _, e = string.find(query, prompt_text)
     query = query:sub(e + 1)
@@ -391,50 +390,50 @@ function NarrowEditor:on_key(key)
       -- clear previous results
       -- TODO: make function
       api.nvim_buf_clear_namespace(self.results_window.buf, self.namespace_id, 0, -1)
-      self.results_window:set_lines(0, -1, {})
+      self.results_window:set_lines({})
     end
   end, 5)
 end
 
 function NarrowEditor:update_real_file()
-  -- local entries = self.results_window:get_all_entries()
-  -- print(vim.inspect(entries))
-  --
-  -- for _, entry in ipairs(entries) do
-  --   local entry_id = entry[1]
-  --   local narrow_result = self.entry_id_to_result[entry_id]
-  --   print(": " .. entry[2])
-  --   local buffer_line = self.results_window:get_lines(entry[2], entry[2] + 1)
-  -- end
+  -- the lines we set initially from the canvas
+  local original_lines = self.results_window:get_lines()
+  -- the lines that are currently visible on screen
+  local buffer_lines = self.results_window:get_buffer_lines(0, -1)
 
-  -- local changes = {}
-  -- for line, _ in ipairs(self.narrow_results) do
-  --   local display_text = buffer_lines[line]
-  --   local narrow_result = self.narrow_results[line]
-  --   if narrow_result.is_header ~= true and display_text ~= narrow_result.entry_text then
-  --     local row, col, text = string.match(display_text, "[%s]*(%d+):[%s]*(%d+):(.*)")
-  --     -- validate the row and col are the same
-  --     if tonumber(row) == narrow_result.row and tonumber(col) == narrow_result.column then
-  --       table.insert(changes, { narrow_result = narrow_result, changed_text = text })
-  --     else
-  --       print("validation error: row and column were modified")
-  --       return
-  --     end
-  --   end
-  -- end
-  --
+  if #buffer_lines ~= #original_lines then
+    print("warning: Cannot update files. Number of lines were modified")
+    return
+  end
+
+  local changes = {}
+  for row, line in ipairs(buffer_lines) do
+    local original_line = original_lines[row]
+    if line ~= original_line then
+      local entry = self.results_window:get_entry_at_row(row - 1)
+      if entry == nil then
+        print("warning: Entry was corrupted. Aborting update to files")
+        return
+      end
+      local narrow_result = self.entry_id_to_result[entry[1]]
+      table.insert(changes, { narrow_result = narrow_result, changed_text = line })
+      -- print("changed detected on line: " .. row .. " with entry: " .. vim.inspect(entry))
+      -- print ("narrow_result: " .. vim.inspect(narrow_result))
+    end
+  end
+
   -- -- todo pop-up confirmation modal instead
-  -- print("narrow: applying " .. #changes .. " changes to real files")
-  --
-  -- -- TODO: batch these changes by header to avoid the io thrashing
-  -- for _, change in ipairs(changes) do
-  --   local nr = change.narrow_result
-  --   local file_lines = narrow_utils.string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
-  --   file_lines[nr.row] = change.changed_text
-  --   narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
-  -- end
-  --
-  -- print("narrow: finished applying " .. #changes .. " changes")
+  print("narrow: applying " .. #changes .. " changes to real files")
+
+  -- TODO: batch these changes by header to avoid the io thrashing
+  for _, change in ipairs(changes) do
+    local nr = change.narrow_result
+    local file_lines = narrow_utils.string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
+    file_lines[nr.row] = change.changed_text
+    narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
+  end
+
+  print("narrow: finished applying " .. #changes .. " changes")
 end
 
 return NarrowEditor

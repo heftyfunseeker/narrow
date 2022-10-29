@@ -1,4 +1,3 @@
-
 Style = {
   types = {
     highlight = 0,
@@ -32,4 +31,3 @@ function Style:new_virtual_text(text, name, pos)
 end
 
 return Style
-
