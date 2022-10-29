@@ -365,7 +365,7 @@ function NarrowEditor:on_key(key)
   end
 
   -- early return if we arent' making a query
-  if curr_win ~= self.input_window.win and api.nvim_get_mode().mode ~= "i" then
+  if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
     return
   end
 
@@ -397,44 +397,44 @@ function NarrowEditor:on_key(key)
 end
 
 function NarrowEditor:update_real_file()
-  if true then return end
+  -- local entries = self.results_window:get_all_entries()
+  -- print(vim.inspect(entries))
+  --
+  -- for _, entry in ipairs(entries) do
+  --   local entry_id = entry[1]
+  --   local narrow_result = self.entry_id_to_result[entry_id]
+  --   print(": " .. entry[2])
+  --   local buffer_line = self.results_window:get_lines(entry[2], entry[2] + 1)
+  -- end
 
-  -- fix narrow_result format below
-  local buffer_lines = self.results_window:get_lines(0, -1)
-
-  if #buffer_lines ~= #self.narrow_results then
-    print("validation error: number of lines were modified " .. #buffer_lines .. " ~= " .. #self.narrow_results)
-    return
-  end
-
-  local changes = {}
-  for line, _ in ipairs(self.narrow_results) do
-    local display_text = buffer_lines[line]
-    local narrow_result = self.narrow_results[line]
-    if narrow_result.is_header ~= true and display_text ~= narrow_result.display_text then
-      local row, col, text = string.match(display_text, "[%s]*(%d+):[%s]*(%d+):(.*)")
-      -- validate the row and col are the same
-      if tonumber(row) == narrow_result.row and tonumber(col) == narrow_result.column then
-        table.insert(changes, { narrow_result = narrow_result, changed_text = text })
-      else
-        print("validation error: row and column were modified")
-        return
-      end
-    end
-  end
-
-  -- todo pop-up confirmation modal instead
-  print("narrow: applying " .. #changes .. " changes to real files")
-
-  -- TODO: batch these changes by header to avoid the io thrashing
-  for _, change in ipairs(changes) do
-    local nr = change.narrow_result
-    local file_lines = narrow_utils.string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
-    file_lines[nr.row] = change.changed_text
-    narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
-  end
-
-  print("narrow: finished applying " .. #changes .. " changes")
+  -- local changes = {}
+  -- for line, _ in ipairs(self.narrow_results) do
+  --   local display_text = buffer_lines[line]
+  --   local narrow_result = self.narrow_results[line]
+  --   if narrow_result.is_header ~= true and display_text ~= narrow_result.entry_text then
+  --     local row, col, text = string.match(display_text, "[%s]*(%d+):[%s]*(%d+):(.*)")
+  --     -- validate the row and col are the same
+  --     if tonumber(row) == narrow_result.row and tonumber(col) == narrow_result.column then
+  --       table.insert(changes, { narrow_result = narrow_result, changed_text = text })
+  --     else
+  --       print("validation error: row and column were modified")
+  --       return
+  --     end
+  --   end
+  -- end
+  --
+  -- -- todo pop-up confirmation modal instead
+  -- print("narrow: applying " .. #changes .. " changes to real files")
+  --
+  -- -- TODO: batch these changes by header to avoid the io thrashing
+  -- for _, change in ipairs(changes) do
+  --   local nr = change.narrow_result
+  --   local file_lines = narrow_utils.string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
+  --   file_lines[nr.row] = change.changed_text
+  --   narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
+  -- end
+  --
+  -- print("narrow: finished applying " .. #changes .. " changes")
 end
 
 return NarrowEditor

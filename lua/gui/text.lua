@@ -12,7 +12,7 @@ function Text:new()
     width = 0,
     height = 0,
     -- use to mark this as a selectable entry
-    entry = nil
+    entry_id = nil
   }
   return setmetatable(new_obj, self)
 end
@@ -22,24 +22,8 @@ function Text:set_text(text)
   return self
 end
 
-function Text:apply_style(style_type, hl_name)
-  local style = nil
-  if style_type == Style.types.highlight then
-    local hl_pos = {
-      row = self.row,
-      col_start = self.col,
-      col_end = string.len(self.text)
-    }
-    style = Style:new_hl(hl_name, hl_pos)
-  else
-    local virtual_text_pos = {
-      row = self.row,
-      col = self.col,
-    }
-    style = Style:new_virtual_text(self.text, hl_name, virtual_text_pos)
-  end
-
-  self.style = style
+function Text:apply_style(type, hl_name)
+  self.style = { type = type, hl_name = hl_name }
 
   return self
 end
@@ -59,13 +43,8 @@ function Text:set_dimensions(width, height)
 end
 
 function Text:mark_entry(entry_id)
-  self.entry = {
-    id = entry_id,
-    pos = {
-      col = self.col,
-      row = self.row
-    }
-  }
+  self.entry_id = entry_id
+
   return self
 end
 
@@ -74,16 +53,43 @@ function Text:render(canvas)
 
   if self.style ~= nil then
     is_virtual_text = self.style.type == Style.types.virtual_text
-    canvas:add_style(self.style)
+    canvas:add_style(self:_build_style())
   end
 
   if is_virtual_text == false then
     canvas:add_text(self.text, self.col, self.row)
   end
 
-  if self.entry ~= nil then
-    canvas:add_entry(self.entry)
+  if self.entry_id ~= nil then
+    canvas:add_entry(self:_build_entry())
   end
+end
+
+function Text:_build_style()
+  if self.style.type == Style.types.highlight then
+    local hl_pos = {
+      row = self.row,
+      col_start = self.col,
+      col_end = string.len(self.text)
+    }
+    return Style:new_hl(self.style.hl_name, hl_pos)
+  end
+
+  local virtual_text_pos = {
+    row = self.row,
+    col = self.col,
+  }
+  return Style:new_virtual_text(self.text, self.style.hl_name, virtual_text_pos)
+end
+
+function Text:_build_entry()
+  return {
+    id = self.entry_id,
+    pos = {
+      col = self.col,
+      row = self.row
+    }
+  }
 end
 
 return Text

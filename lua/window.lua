@@ -115,4 +115,9 @@ function Window:get_entry_at_cursor()
   return api.nvim_buf_get_extmarks(self.buf, entry_namespace_id, { row, 0 }, { row, -1 }, {limit = 1})
 end
 
+function Window:get_all_entries()
+  -- we could eventually support entry
+  return api.nvim_buf_get_extmarks(self.buf, entry_namespace_id, 0, -1, {})
+end
+
 return Window
