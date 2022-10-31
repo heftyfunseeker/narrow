@@ -10,6 +10,7 @@ local entry_namespace_id = api.nvim_create_namespace("narrow/window/entry")
 function Window:new()
   local new_obj = {
     buf_options = {},
+    win_options = {},
     win_config = {
       style = "minimal",
       relative = "editor",
@@ -52,6 +53,11 @@ function Window:set_buf_option(option_name, option_value)
   return self
 end
 
+function Window:set_win_option(option_name, option_value)
+  self.win_options[option_name] = option_value
+  return self
+end
+
 function Window:get_config()
   return self.win_config
 end
@@ -68,6 +74,9 @@ function Window:render()
   end
 
   local window = api.nvim_open_win(buffer, true, self:get_config())
+  for option_name, option_value in pairs(self.win_options) do
+    api.nvim_win_set_option(window, option_name, option_value)
+  end
 
   self.buf = buffer
   self.win = window
@@ -78,6 +87,12 @@ end
 function Window:set_lines(lines)
   self.lines = lines
   api.nvim_buf_set_lines(self.buf, 0, -1, true, lines)
+end
+
+function Window:clear()
+  api.nvim_buf_set_lines(self.buf, 0, -1, true, {})
+  api.nvim_buf_clear_namespace(self.buf, namespace_id, 0, -1)
+  api.nvim_buf_clear_namespace(self.buf, entry_namespace_id, 0, -1)
 end
 
 -- returns the lines that were used in the last call to set_lines

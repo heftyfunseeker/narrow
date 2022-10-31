@@ -9,7 +9,7 @@ M.open = function()
   -- api.nvim_set_hl(0, "NarrowMatch", { fg = "Red", bold = true })
   --
   api.nvim_command("hi def link NarrowHeader Function")
-  api.nvim_command("hi def link NarrowMatch Identifier")
+  api.nvim_command("hi def link NarrowMatch Keyword")
   api.nvim_command("hi def link HUD Error")
   api.nvim_command("hi def link Query Todo")
 

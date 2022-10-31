@@ -1,5 +1,5 @@
 Style = {
-  types = {
+  Types = {
     highlight = 0,
     virtual_text = 1,
   }
@@ -11,7 +11,7 @@ Style.__index = Style
 -- pos: { row, col_start, col_end }
 function Style:new_hl(name, pos)
   local new_obj = {
-    type = Style.types.highlight,
+    type = Style.Types.highlight,
     name = name,
     pos = pos,
   }
@@ -22,7 +22,7 @@ end
 -- pos: { row, col }
 function Style:new_virtual_text(text, name, pos)
   local new_obj = {
-    type = Style.types.virtual_text,
+    type = Style.Types.virtual_text,
     text = text,
     name = name,
     pos = pos,

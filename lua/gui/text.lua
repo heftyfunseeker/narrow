@@ -1,12 +1,18 @@
 local Style = require("gui.style")
 
-Text = {}
+Text = {
+  AlignmentType = {
+    center = 0,
+    right = 1
+  }
+}
 Text.__index = Text
 
 function Text:new()
   local new_obj = {
     text = nil,
     style = nil,
+    alignment_type = nil,
     row = -1,
     col = -1,
     width = 0,
@@ -24,6 +30,12 @@ end
 
 function Text:apply_style(type, props)
   self.style = { type = type, props = props }
+
+  return self
+end
+
+function Text:set_alignment(alignment_type)
+  self.alignment_type = alignment_type
 
   return self
 end
@@ -51,13 +63,21 @@ end
 function Text:render(canvas)
   local is_virtual_text = false
 
+  local text = self.text
+  if self.alignment_type ~= nil then
+    text = self:_apply_aligment()
+  end
+
   if self.style ~= nil then
-    is_virtual_text = self.style.type == Style.types.virtual_text
-    canvas:add_style(self:_build_style())
+    is_virtual_text = self.style.type == Style.Types.virtual_text
+    canvas:add_style(self:_build_style(text))
   end
 
   if is_virtual_text == false then
-    canvas:add_text(self.text, self.col, self.row)
+    canvas:add_text(text, self.col, self.row)
+  else
+    -- we need to ensure there's a row for the virtual text to write to
+    canvas:add_text("", 0, self.row)
   end
 
   if self.entry_id ~= nil then
@@ -65,14 +85,45 @@ function Text:render(canvas)
   end
 end
 
-function Text:_build_style()
+function Text:_apply_aligment()
+  if self.alignment_type == Text.AlignmentType.center then
+    return self:_apply_center_alignment()
+  elseif self.alignment_type == Text.AlignmentType.right then
+    return self:_apply_right_alignment()
+  end
+  return self.text
+end
+
+function Text:_apply_center_alignment()
+  local text_len = string.len(self.text)
+  if self.width < text_len then
+    return self.text
+  end
+
+  local padding = math.floor((self.width - text_len) * .5)
+  local padding_text = string.rep(" ", padding)
+  return padding_text .. self.text .. padding_text
+end
+
+function Text:_apply_right_alignment()
+  local text_len = string.len(self.text)
+  if self.width < text_len then
+    return self.text
+  end
+
+  local padding = math.floor(self.width - text_len)
+  local padding_text = string.rep(" ", padding)
+  return padding_text .. self.text
+end
+
+function Text:_build_style(text)
   local props = self.style.props
 
-  if self.style.type == Style.types.highlight then
+  if self.style.type == Style.Types.highlight then
     local hl_pos = {
       row = self.row,
       col_start = self.col,
-      col_end = string.len(self.text)
+      col_end = self.col + string.len(self.text)
     }
     return Style:new_hl(props.hl_name, hl_pos)
   end
@@ -82,7 +133,7 @@ function Text:_build_style()
     row = self.row,
     col = self.col,
   }
-  return Style:new_virtual_text(self.text, props.hl_name, virtual_text_pos)
+  return Style:new_virtual_text(text, props.hl_name, virtual_text_pos)
 end
 
 function Text:_build_entry()

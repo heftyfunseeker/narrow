@@ -6,11 +6,17 @@ Layout = {}
 function Layout:new()
   local new_obj = {
     results_window = nil,
+    entry_header_window = nil,
     input_window = nil,
     hud_window = nil,
   }
   self.__index = self
   return setmetatable(new_obj, self)
+end
+
+function Layout:set_entry_header_window(entry_header_window)
+  self.entry_header_window = entry_header_window
+  return self
 end
 
 function Layout:set_results_window(results_window)
@@ -32,14 +38,23 @@ function Layout:render()
   local columns = api.nvim_get_option("columns")
   local lines = api.nvim_get_option("lines")
 
+  local entry_header_width = 6
+  local entry_header_border_width = 2
+
   -- results window
   local results_line_percent = 0.6
+  local results_pos_x = entry_header_width + entry_header_border_width
   local results_pos_y = math.max(math.floor(results_line_percent * lines), 1)
   local results_height = lines - results_pos_y - 1
 
   self.results_window
+      :set_pos(results_pos_x, results_pos_y)
+      :set_dimensions(columns - results_pos_x, results_height)
+      :render()
+
+  self.entry_header_window
       :set_pos(0, results_pos_y)
-      :set_dimensions(columns, results_height)
+      :set_dimensions(entry_header_width, results_height)
       :render()
 
   -- input window

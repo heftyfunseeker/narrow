@@ -12,12 +12,22 @@ local NarrowEditor = {}
 
 -- creates the results and preview buffers/windows
 function NarrowEditor:_build_layout(config)
+  local entry_header_window = Window
+      :new()
+      :set_buf_option("bufhidden", "wipe")
+      :set_buf_option("buftype", "nofile")
+      :set_buf_option("swapfile", false)
+      :set_win_option("scrollbind", true)
+      :set_border({ "", "", "", "", "", "─", "╰", "│" })
+
   local results_window = Window
       :new()
       :set_buf_option("bufhidden", "wipe")
       :set_buf_option("buftype", "nofile")
       :set_buf_option("swapfile", false)
-      :set_border({ "", "", "", "│", "╯", "─", "╰", "│" })
+      :set_win_option("scrollbind", true)
+      :set_win_option("wrap", false)
+      :set_border({ "", "", "", "│", "╯", "─", "", "" })
 
   local hud_window = Window
       :new()
@@ -35,10 +45,13 @@ function NarrowEditor:_build_layout(config)
 
   self.layout = Layout
       :new()
+      :set_entry_header_window(entry_header_window)
       :set_results_window(results_window)
       :set_hud_window(hud_window)
       :set_input_window(input_window)
       :render()
+
+  self.entry_header_window = entry_header_window
 
   self.results_window = results_window
   self.results_window:set_lines({})
@@ -178,6 +191,9 @@ function NarrowEditor:new(config)
 end
 
 function NarrowEditor:drop()
+  self.entry_header_window:drop()
+  self.entry_header_window = nil
+
   self.results_window:drop()
   self.results_window = nil
 
@@ -204,7 +220,6 @@ function NarrowEditor:get_result()
   local entry = self.results_window:get_entry_at_cursor()
   if entry == nil then return end
 
-  print("entry: " .. vim.inspect(entry))
   local result = self.entry_id_to_result[entry[1]]
 
   if result == nil then
@@ -236,6 +251,7 @@ end
 
 function NarrowEditor:render_results()
   local canvas = Canvas:new()
+  local header_canvas = Canvas:new()
 
   local headers_processed = {}
   self.entry_id_to_result = {}
@@ -253,36 +269,61 @@ function NarrowEditor:render_results()
       Text:new()
           :set_text(icon)
           :set_pos(0, row)
-          :apply_style(Style.types.virtual_text, { hl_name = hl_name, pos_type = "overlay" })
+          :apply_style(Style.Types.virtual_text, { hl_name = hl_name, pos_type = "overlay" })
           :render(canvas)
 
       Text:new()
           :set_text(" " .. result.header)
           :set_pos(1, row)
-          :apply_style(Style.types.virtual_text, { hl_name = "NarrowHeader", pos_type = "overlay" })
+          :apply_style(Style.Types.virtual_text, { hl_name = "NarrowHeader", pos_type = "overlay" })
           :render(canvas)
 
       row = row + 1
     end
 
     Text:new()
-        :set_text(result.entry_header)
+        :set_text(result.entry_text)
         :set_pos(0, row)
-        :apply_style(Style.types.virtual_text, { hl_name = "Comment" })
         :mark_entry(row)-- mark this as a selectable entry
         :render(canvas)
 
     Text:new()
-        :set_text(result.entry_text)
-        :set_pos(string.len(result.entry_header) + 1, row)
+        :set_text(self:get_query_result(result.entry_text, result.column))
+        :set_pos(result.column - 1, row)
+        :apply_style(Style.Types.highlight, { hl_name = "NarrowMatch" })
         :render(canvas)
+
+    Text:new()
+        :set_text(result.entry_header)
+        :set_dimensions(5, 1)
+        :set_alignment(Text.AlignmentType.right)
+        :set_pos(0, row)
+        :apply_style(Style.Types.virtual_text, { hl_name = "Comment", pos_type = "overlay" })
+        :render(header_canvas)
 
     self.entry_id_to_result[row] = result
     row = row + 1
   end
 
   canvas:render_to_window(self.results_window)
+  header_canvas:render_to_window(self.entry_header_window)
 end
+
+-- @todo: probably a can of worms in here, but this works for now
+function NarrowEditor:get_query_result(line, start)
+  local is_case_insensitive = string.match(self.query, "%u") == nil
+  local target = line
+  if is_case_insensitive then
+    target = string.lower(line)
+  end
+  local i, j = string.find(target, self.query, start - 1)
+  if i == nil or j == nil then
+    print("error: could not resolve the narrow query result")
+    return self.query -- just return the query to see what happened
+  end
+  return line:sub(i, j)
+end
+
 
 function NarrowEditor:search(query_term)
   -- clear previous results out
@@ -387,14 +428,15 @@ function NarrowEditor:on_key(key)
     if query ~= nil and #query >= 2 then
       self:search(query)
     else
-      -- clear previous results
-      -- TODO: make function
-      api.nvim_buf_clear_namespace(self.results_window.buf, self.namespace_id, 0, -1)
-      self.results_window:set_lines({})
+      self.results_window:clear()
+      self.entry_header_window:clear()
     end
   end, 5)
 end
 
+-- @todo: To reload opened files that have changed because of this function,
+-- should we iterate through open file that were modified and `:e!` to reload them?
+-- Maybe we have this as a settings for users to configure?
 function NarrowEditor:update_real_file()
   -- the lines we set initially from the canvas
   local original_lines = self.results_window:get_lines()
@@ -402,7 +444,7 @@ function NarrowEditor:update_real_file()
   local buffer_lines = self.results_window:get_buffer_lines(0, -1)
 
   if #buffer_lines ~= #original_lines then
-    print("warning: Cannot update files. Number of lines were modified")
+    print("narrow warning: Cannot update files. Number of lines were modified")
     return
   end
 
@@ -412,18 +454,16 @@ function NarrowEditor:update_real_file()
     if line ~= original_line then
       local entry = self.results_window:get_entry_at_row(row - 1)
       if entry == nil then
-        print("warning: Entry was corrupted. Aborting update to files")
+        print("narrow warning: Entry was corrupted. Aborting update to files")
         return
       end
       local narrow_result = self.entry_id_to_result[entry[1]]
       table.insert(changes, { narrow_result = narrow_result, changed_text = line })
-      -- print("changed detected on line: " .. row .. " with entry: " .. vim.inspect(entry))
-      -- print ("narrow_result: " .. vim.inspect(narrow_result))
     end
   end
 
   -- -- todo pop-up confirmation modal instead
-  print("narrow: applying " .. #changes .. " changes to real files")
+  print("narrow: Applying " .. #changes .. " changes to real files")
 
   -- TODO: batch these changes by header to avoid the io thrashing
   for _, change in ipairs(changes) do
@@ -433,7 +473,7 @@ function NarrowEditor:update_real_file()
     narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
   end
 
-  print("narrow: finished applying " .. #changes .. " changes")
+  print("narrow: Finished applying " .. #changes .. " changes")
 end
 
 return NarrowEditor

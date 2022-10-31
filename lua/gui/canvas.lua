@@ -32,11 +32,15 @@ function Canvas:add_text(text, col, row)
   else
     local line = self.lines[row]
     local line_len = string.len(line)
+
+    -- if existing line length is less than the desired column, 
+    -- inject padding to start of column
     if line_len < col then
       line = line .. string.rep(" ", col - line_len - 1) .. text
     else
-      line = line:sub(1, col - 1) .. text
+      line = line:sub(0, col) .. text .. line:sub(col + string.len(text) + 1)
     end
+
     self.lines[row] = line
   end
 end
@@ -64,10 +68,10 @@ function Canvas:render_to_window(window)
 
   -- apply styles
   for _, style in ipairs(self.styles) do
-    if style.type == Style.types.highlight then
+    if style.type == Style.Types.highlight then
       -- make highlight call to window
       window:add_highlight(style.name, style.pos)
-    elseif style.type == Style.types.virtual_text then
+    elseif style.type == Style.Types.virtual_text then
       window:add_virtual_text(style.text, style.name, style.pos)
     end
   end

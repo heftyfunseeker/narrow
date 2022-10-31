@@ -1,9 +1,10 @@
 NarrowResult = {}
+NarrowResult.__index = NarrowResult
 
 function NarrowResult:new(raw_line)
   local header, row, column, text = string.match(raw_line, "([^:]*):(%d+):(%d+):(.*)")
   if row and column and header and text then
-    local entry_header = string.format("%3d:%3d:",tonumber(row), tonumber(column))
+    local entry_header = string.format("%d",tonumber(row))
     local new_obj = {
       header = header,
       row = tonumber(row),
@@ -12,10 +13,8 @@ function NarrowResult:new(raw_line)
       entry_header = entry_header,
       entry_text = text
     }
-    self.__index = self
     return setmetatable(new_obj, self)
   end
-
   return nil
 end
 
