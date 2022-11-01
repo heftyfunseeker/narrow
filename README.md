@@ -14,5 +14,4 @@ It's stable enough that I'm daily driving it at my 9-5, but it's still in the ea
 #### Why
 Placing search results in a modifiable buffer allows us to use all of vim's built-in goodies for working with our results. My search habbits often constisting of ripgrep over an initial pattern, and then searching within the results buffer to "narrow" things down. Search and replace in the buffer allows for low effort global search and replace too
 
-
-<img width="1278" alt="Screenshot 2022-10-31 at 10 25 09 AM" src="https://user-images.githubusercontent.com/1953178/199071499-02bbb561-bff9-4f19-83a1-777288e52834.png">
+<img width="1975" alt="Screenshot 2022-11-01 at 1 33 58 PM" src="https://user-images.githubusercontent.com/1953178/199335922-899d1b8c-4aa7-4c4c-b7f0-16b056bc1a9d.png">
