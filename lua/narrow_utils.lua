@@ -1,4 +1,6 @@
-local M = {}
+local M = {
+  array = {}
+}
 
 
 M.string_to_lines = function(str)
@@ -35,6 +37,17 @@ M.get_file_extension = function(file_path)
     ext:sub(2)
   end
 end
+
+-- @ret index of element, -1 if not found
+M.array.index_of = function(array, target)
+  for i, curr in ipairs(array) do
+    if curr == target then
+      return i
+    end
+  end
+  return -1
+end
+
 
 M.get_parser = function(result_header)
   -- TODO: do this correctly

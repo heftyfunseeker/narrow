@@ -18,10 +18,18 @@ M.open = function()
 
   narrow_editor = NarrowEditor:new({})
 
-  vim.cmd([[ au VimResized * :lua require("narrow").resize() ]])
+  vim.cmd([[
+    augroup narrow
+      au!
+      au VimResized * :lua require("narrow").resize()
+      au CursorMoved * :lua require("narrow").on_cursor_moved() 
+    augroup END
+  ]])
 end
 
 M.close = function()
+  vim.cmd([[ au! narrow ]])
+
   if narrow_editor then
     narrow_editor:drop()
   end
@@ -34,6 +42,7 @@ M.goto_result = function()
   end
 
   M.close()
+
   api.nvim_command("edit " .. result.header)
   api.nvim_win_set_cursor(0, { result.row, result.column - 1 })
 end
@@ -59,6 +68,12 @@ end
 M.resize = function()
   if narrow_editor then
     narrow_editor:resize()
+  end
+end
+
+M.on_cursor_moved = function()
+  if narrow_editor then
+    narrow_editor:on_cursor_moved()
   end
 end
 

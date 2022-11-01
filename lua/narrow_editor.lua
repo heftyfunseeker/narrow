@@ -68,7 +68,7 @@ function NarrowEditor:_build_layout(config)
 
   -- create floating window hud
   self.hud_window = hud_window
-  self:_set_hud_text("")
+  self:_render_hud()
 
   -- input
   self.input_window = input_window
@@ -82,35 +82,44 @@ function NarrowEditor:_build_layout(config)
   api.nvim_command("startinsert")
 end
 
-function NarrowEditor:_update_hud()
+function NarrowEditor:_render_hud()
+  self.hud_window:clear()
+
+  if self.results_window == nil then return end
+
   local results = self.narrow_results
-  if #results == 0 then
-    return
+  if results == nil or #results == nil then return end
+
+  local hud_width, _ = self.hud_window:get_dimensions()
+
+  local canvas = Canvas:new()
+
+  local result = self:get_result()
+  if result == nil then
+    Text
+        :new()
+        :set_text(string.format("%d  ", #results))
+        :set_alignment(Text.AlignmentType.right)
+        :set_pos(0, 0)
+        :set_dimensions(hud_width, 1)
+        :render(canvas)
+
+  else
+    local index_of_entry = narrow_utils.array.index_of(results, result)
+    if index_of_entry == -1 then return end
+
+    Text
+        :new()
+        :set_text(string.format("%d/%d  ", index_of_entry, #results))
+        :set_alignment(Text.AlignmentType.right)
+        :set_pos(0, 0)
+        :set_dimensions(hud_width, 1)
+        :render(canvas)
   end
 
-  local c = api.nvim_win_get_cursor(self.results_window.win)
-  local result_index = c[1]
-  -- result headers are interleaved with result lines, so subtract the num of headers
-  local i = result_index
-  local result_num = result_index
-  -- find our header by walking backwards up the results list
-  while i > 0 do
-    if results[i] ~= nil and results[i].is_header then
-      result_num = result_index - results[i].header_number - 1
-      break
-    end
-    i = i - 1
-  end
-
-  if self.num_results ~= nil and result_num ~= nil then
-    local results_text = result_num .. "/" .. self.num_results
-    self:_set_hud_text(results_text)
-  end
-end
-
-function NarrowEditor:_set_hud_text(display_text)
-  self.hud_window:set_lines({ display_text_with_padding })
-  api.nvim_buf_add_highlight(self.hud_window.buf, -1, "HUD", 0, 0, -1)
+  -- @todo: lets have the window take a canvas instead to render
+  -- api kinda ping pongs
+  canvas:render_to_window(self.hud_window)
 end
 
 -- should we instead expose se.get_results_buf()?
@@ -213,18 +222,22 @@ end
 function NarrowEditor:resize()
   if self.layout then
     self.layout:render()
+    self:_render_hud()
   end
 end
 
+function NarrowEditor:on_cursor_moved()
+  self:_render_hud()
+end
+
 function NarrowEditor:get_result()
+  if self.results_window == nil then return nil end
+
   local entry = self.results_window:get_entry_at_cursor()
   if entry == nil then return end
 
   local result = self.entry_id_to_result[entry[1]]
-
-  if result == nil then
-    return nil
-  end
+  if result == nil then return nil end
 
   return result
 end
@@ -307,6 +320,8 @@ function NarrowEditor:render_results()
 
   canvas:render_to_window(self.results_window)
   header_canvas:render_to_window(self.entry_header_window)
+
+  self:_render_hud()
 end
 
 -- @todo: probably a can of worms in here, but this works for now
@@ -323,7 +338,6 @@ function NarrowEditor:get_query_result(line, start)
   end
   return line:sub(i, j)
 end
-
 
 function NarrowEditor:search(query_term)
   -- clear previous results out
@@ -370,26 +384,6 @@ function NarrowEditor:search(query_term)
   vim.loop.read_start(stderr, onread)
 end
 
-function NarrowEditor:schedule_result_hovered()
-  vim.defer_fn(function()
-    if self.results_window == nil then
-      return
-    end
-
-    local c = api.nvim_win_get_cursor(self.results_window.win)
-    local result = self.narrow_results[c[1]]
-    if result == nil or result.is_header then
-      return
-    end
-
-    self:on_result_hovered(result)
-  end, 0)
-end
-
-function NarrowEditor:on_result_hovered(_result)
-  self:_update_hud()
-end
-
 function NarrowEditor:on_key(key)
   local escape_key = "\27"
   if key == escape_key then
@@ -397,12 +391,6 @@ function NarrowEditor:on_key(key)
   end
 
   local curr_win = api.nvim_get_current_win()
-
-  if curr_win == self.results_window.win then
-    if api.nvim_get_mode().mode ~= "i" then
-      self:schedule_result_hovered()
-    end
-  end
 
   -- early return if we arent' making a query
   if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
@@ -430,6 +418,7 @@ function NarrowEditor:on_key(key)
     else
       self.results_window:clear()
       self.entry_header_window:clear()
+      self.hud_window:clear()
     end
   end, 5)
 end

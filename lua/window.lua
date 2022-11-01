@@ -26,7 +26,9 @@ function Window:new()
 end
 
 function Window:drop()
-  api.nvim_buf_delete(self.buf, { force = true })
+  if api.nvim_buf_is_valid(self.buf) then
+    api.nvim_buf_delete(self.buf, { force = true })
+  end
   self.buf = nil
   self.window = nil
 end
@@ -41,6 +43,10 @@ function Window:set_dimensions(width, height)
   self.win_config.width = width
   self.win_config.height = height
   return self
+end
+
+function Window:get_dimensions()
+  return self.win_config.width, self.win_config.height
 end
 
 function Window:set_border(border)
