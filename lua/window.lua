@@ -95,10 +95,17 @@ function Window:set_lines(lines)
   api.nvim_buf_set_lines(self.buf, 0, -1, true, lines)
 end
 
-function Window:clear()
+function Window:clear(additional_namespaces)
   api.nvim_buf_set_lines(self.buf, 0, -1, true, {})
   api.nvim_buf_clear_namespace(self.buf, namespace_id, 0, -1)
   api.nvim_buf_clear_namespace(self.buf, entry_namespace_id, 0, -1)
+
+  if additional_namespaces == nil then return end
+
+  for _, namespace in ipairs(additional_namespaces) do
+    print("clearing namespace")
+    api.nvim_buf_clear_namespace(self.buf, namespace, 0, -1)
+  end
 end
 
 -- returns the lines that were used in the last call to set_lines
@@ -126,30 +133,46 @@ function Window:add_virtual_text(text, hl_name, pos)
   api.nvim_buf_set_extmark(self.buf, namespace_id, pos.row, pos.col, opts)
 end
 
-function Window:add_entry(entry_id, pos)
+function Window:add_entry(entry_id, pos, namespace)
+  if namespace == nil then
+    namespace = entry_namespace_id
+  end
+
   local opts = {
     virt_text = {},
     id = entry_id,
     virt_text_pos = "overlay",
     strict = false,
   }
-  api.nvim_buf_set_extmark(self.buf, entry_namespace_id, pos.row, 0, opts)
+  api.nvim_buf_set_extmark(self.buf, namespace, pos.row, 0, opts)
 end
 
 -- List of [extmark_id, row, col] tuples in "traversal order".
-function Window:get_entry_at_cursor()
+function Window:get_entry_at_cursor(namespace)
+  if namespace == nil then
+    namespace = entry_namespace_id
+  end
+
   local row = api.nvim_win_get_cursor(self.win)[1] - 1
-  return self:get_entry_at_row(row)
+  return self:get_entry_at_row(row, namespace)
 end
 
-function Window:get_entry_at_row(row)
+function Window:get_entry_at_row(row, namespace)
+  if namespace == nil then
+    namespace = entry_namespace_id
+  end
+
   -- we could eventually support entry
-  return api.nvim_buf_get_extmarks(self.buf, entry_namespace_id, { row, 0 }, { row, -1 }, { limit = 1 })[1]
+  return api.nvim_buf_get_extmarks(self.buf, namespace, { row, 0 }, { row, -1 }, { limit = 1 })[1]
 end
 
-function Window:get_all_entries()
+function Window:get_all_entries(namespace)
+  if namespace == nil then
+    namespace = entry_namespace_id
+  end
+
   -- we could eventually support entry
-  return api.nvim_buf_get_extmarks(self.buf, entry_namespace_id, 0, -1, {})
+  return api.nvim_buf_get_extmarks(self.buf, namespace, 0, -1, {})
 end
 
 return Window

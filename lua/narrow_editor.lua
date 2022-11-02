@@ -87,35 +87,30 @@ function NarrowEditor:_render_hud()
 
   if self.results_window == nil then return end
 
-  local results = self.narrow_results
-  if results == nil or #results == nil then return end
+  local namespace_id = self.entry_result_namespace_id
 
+  local entry = self.results_window:get_entry_at_cursor(namespace_id)
+  if entry == nil then
+    namespace_id = self.entry_header_namespace_id
+    entry = self.results_window:get_entry_at_cursor(namespace_id)
+  end
+
+  if entry == nil then
+    return
+  end
+
+  local entry_index = entry[1] -- id is the index in namespace
+  local entries = self.results_window:get_all_entries(namespace_id)
   local hud_width, _ = self.hud_window:get_dimensions()
 
   local canvas = Canvas:new()
-
-  local result = self:get_result()
-  if result == nil then
-    Text
-        :new()
-        :set_text(string.format("%d  ", #results))
-        :set_alignment(Text.AlignmentType.right)
-        :set_pos(0, 0)
-        :set_dimensions(hud_width, 1)
-        :render(canvas)
-
-  else
-    local index_of_entry = narrow_utils.array.index_of(results, result)
-    if index_of_entry == -1 then return end
-
-    Text
-        :new()
-        :set_text(string.format("%d/%d  ", index_of_entry, #results))
-        :set_alignment(Text.AlignmentType.right)
-        :set_pos(0, 0)
-        :set_dimensions(hud_width, 1)
-        :render(canvas)
-  end
+  Text
+      :new()
+      :set_text(string.format("%d/%d  ", entry_index, #entries))
+      :set_alignment(Text.AlignmentType.right)
+      :set_pos(0, 0)
+      :set_dimensions(hud_width, 1)
+      :render(canvas)
 
   -- @todo: lets have the window take a canvas instead to render
   -- api kinda ping pongs
@@ -178,6 +173,8 @@ function NarrowEditor:new(config)
 
     -- state ---------
     namespace_id = api.nvim_create_namespace("narrow"),
+    entry_header_namespace_id = api.nvim_create_namespace("narrow/entry/header"),
+    entry_result_namespace_id = api.nvim_create_namespace("narrow/entry/result"),
     narrow_results = {},
     query = {},
     debounce_count = 0,
@@ -233,10 +230,10 @@ end
 function NarrowEditor:get_result()
   if self.results_window == nil then return nil end
 
-  local entry = self.results_window:get_entry_at_cursor()
+  local entry = self.results_window:get_entry_at_cursor(self.entry_result_namespace_id)
   if entry == nil then return end
 
-  local result = self.entry_id_to_result[entry[1]]
+  local result = self.narrow_results[entry[1]]
   if result == nil then return nil end
 
   return result
@@ -263,13 +260,16 @@ function NarrowEditor:add_grep_result(grep_results)
 end
 
 function NarrowEditor:render_results()
+  self.results_window:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
+
   local canvas = Canvas:new()
   local header_canvas = Canvas:new()
 
   local headers_processed = {}
-  self.entry_id_to_result = {}
 
   local row = 0
+  local entry_result_index = 1
+  local entry_header_index = 1
   for _, result in ipairs(self.narrow_results) do
     if result.header and headers_processed[result.header] == nil then
       headers_processed[result.header] = true
@@ -289,15 +289,17 @@ function NarrowEditor:render_results()
           :set_text(" " .. result.header)
           :set_pos(1, row)
           :apply_style(Style.Types.virtual_text, { hl_name = "NarrowHeader", pos_type = "overlay" })
+          :mark_entry(entry_header_index, self.entry_header_namespace_id)-- mark this as a selectable entry
           :render(canvas)
 
       row = row + 1
+      entry_header_index = entry_header_index + 1
     end
 
     Text:new()
         :set_text(result.entry_text)
         :set_pos(0, row)
-        :mark_entry(row)-- mark this as a selectable entry
+        :mark_entry(entry_result_index, self.entry_result_namespace_id)-- mark this as a selectable entry
         :render(canvas)
 
     Text:new()
@@ -314,8 +316,8 @@ function NarrowEditor:render_results()
         :apply_style(Style.Types.virtual_text, { hl_name = "Comment", pos_type = "overlay" })
         :render(header_canvas)
 
-    self.entry_id_to_result[row] = result
     row = row + 1
+    entry_result_index = entry_result_index + 1
   end
 
   canvas:render_to_window(self.results_window)
@@ -416,7 +418,7 @@ function NarrowEditor:on_key(key)
     if query ~= nil and #query >= 2 then
       self:search(query)
     else
-      self.results_window:clear()
+      self.results_window:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
       self.entry_header_window:clear()
       self.hud_window:clear()
     end
@@ -441,12 +443,12 @@ function NarrowEditor:update_real_file()
   for row, line in ipairs(buffer_lines) do
     local original_line = original_lines[row]
     if line ~= original_line then
-      local entry = self.results_window:get_entry_at_row(row - 1)
+      local entry = self.results_window:get_entry_at_row(row - 1, self.entry_result_namespace_id)
       if entry == nil then
         print("narrow warning: Entry was corrupted. Aborting update to files")
         return
       end
-      local narrow_result = self.entry_id_to_result[entry[1]]
+      local narrow_result = self.narrow_results[entry[1]]
       table.insert(changes, { narrow_result = narrow_result, changed_text = line })
     end
   end

@@ -78,7 +78,7 @@ function Canvas:render_to_window(window)
 
   -- apply entry identifiers
   for _, entry in ipairs(self.entries) do
-    window:add_entry(entry.id, entry.pos)
+    window:add_entry(entry.id, entry.pos, entry.entry_namespace)
   end
 end
 

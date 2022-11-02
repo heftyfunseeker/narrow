@@ -54,8 +54,9 @@ function Text:set_dimensions(width, height)
   return self
 end
 
-function Text:mark_entry(entry_id)
+function Text:mark_entry(entry_id, entry_namespace)
   self.entry_id = entry_id
+  self.entry_namespace = entry_namespace
 
   return self
 end
@@ -139,6 +140,7 @@ end
 function Text:_build_entry()
   return {
     id = self.entry_id,
+    entry_namespace = self.entry_namespace,
     pos = {
       col = self.col,
       row = self.row
