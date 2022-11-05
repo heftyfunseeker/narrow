@@ -77,4 +77,16 @@ M.on_cursor_moved = function()
   end
 end
 
+M.toggle_search_regex = function(config)
+  if narrow_editor then
+    local config = narrow_editor:get_config()
+    local enable_regex = config.search.enable_regex
+    narrow_editor:apply_config({
+      search = {
+        enable_regex = not enable_regex
+      }
+    })
+  end
+end
+
 return M

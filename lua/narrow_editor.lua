@@ -95,21 +95,40 @@ function NarrowEditor:_render_hud()
     entry = self.results_window:get_entry_at_cursor(namespace_id)
   end
 
-  if entry == nil then
-    return
+  local canvas = Canvas:new()
+
+  -- results
+  if entry ~= nil then
+    local entry_index = entry[1] -- id is the index in namespace
+    local entries = self.results_window:get_all_entries(namespace_id)
+    local hud_width, _ = self.hud_window:get_dimensions()
+
+    Text
+        :new()
+        :set_text(string.format("%d/%d  ", entry_index, #entries))
+        :set_alignment(Text.AlignmentType.right)
+        :set_pos(0, 0)
+        :set_dimensions(hud_width, 1)
+        :render(canvas)
   end
 
-  local entry_index = entry[1] -- id is the index in namespace
-  local entries = self.results_window:get_all_entries(namespace_id)
-  local hud_width, _ = self.hud_window:get_dimensions()
-
-  local canvas = Canvas:new()
+  -- search config
+  local btn_hl = "Identifier"
+  if self.config.search.enable_regex then
+    btn_hl = "Function"
+  end
   Text
       :new()
-      :set_text(string.format("%d/%d  ", entry_index, #entries))
-      :set_alignment(Text.AlignmentType.right)
+      :set_text("|")
+      :apply_style(Style.Types.highlight, { hl_name = btn_hl })
       :set_pos(0, 0)
-      :set_dimensions(hud_width, 1)
+      :render(canvas)
+
+  Text
+      :new()
+      :set_text("regex")
+      :set_pos(1, 0)
+      :apply_style(Style.Types.highlight, { hl_name = "Identifier" })
       :render(canvas)
 
   -- @todo: lets have the window take a canvas instead to render
@@ -162,6 +181,21 @@ function NarrowEditor:_set_keymaps(config)
     ':lua require("narrow").update_real_file() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
+  api.nvim_buf_set_keymap(
+    self.input_window.buf,
+    "n",
+    "<C-r>",
+    ':lua require("narrow").toggle_search_regex() <CR>',
+    { nowait = true, noremap = true, silent = true }
+  )
+end
+
+function get_default_config()
+  return {
+    search = {
+      enable_regex = false
+    }
+  }
 end
 
 function NarrowEditor:new(config)
@@ -175,6 +209,8 @@ function NarrowEditor:new(config)
     namespace_id = api.nvim_create_namespace("narrow"),
     entry_header_namespace_id = api.nvim_create_namespace("narrow/entry/header"),
     entry_result_namespace_id = api.nvim_create_namespace("narrow/entry/result"),
+    -- @todo: build defaults
+    config = get_default_config(),
     narrow_results = {},
     query = {},
     debounce_count = 0,
@@ -214,6 +250,19 @@ function NarrowEditor:drop()
 
   vim.wo.number = self.wo.number
   vim.wo.relativenumber = self.wo.relativenumber
+end
+
+function NarrowEditor:get_config()
+  return self.config
+end
+
+function NarrowEditor:apply_config(config)
+  narrow_utils.array.merge(self.config, config)
+
+  -- apply any visual updates to the hud
+  if self.hud_window then
+    self:_render_hud()
+  end
 end
 
 function NarrowEditor:resize()
@@ -326,19 +375,36 @@ function NarrowEditor:render_results()
   self:_render_hud()
 end
 
--- @todo: probably a can of worms in here, but this works for now
+-- @todo: deprecate once we're parsing json
 function NarrowEditor:get_query_result(line, start)
   local is_case_insensitive = string.match(self.query, "%u") == nil
   local target = line
   if is_case_insensitive then
     target = string.lower(line)
   end
-  local i, j = string.find(target, self.query, start - 1)
-  if i == nil or j == nil then
-    print("error: could not resolve the narrow query result")
-    return self.query -- just return the query to see what happened
+
+  local query = self.query
+  local matches = 0
+  local use_fixed_strings = not self.config.search.enable_regex
+  if not use_fixed_strings then
+    query, matches = string.gsub(query, "\\", "%")
   end
-  return line:sub(i, j)
+  local i, j = string.find(target, query, start - 1, use_fixed_strings)
+  if i == nil or j == nil then
+    print("error: could not resolve the narrow query result: " .. query)
+    return query -- just return the query to see what happened
+  end
+  return line:sub(i, j + matches)
+end
+
+function NarrowEditor:build_rg_args(query_term)
+  local args = { query_term, "--smart-case", "--vimgrep", "-M", "1024" }
+
+  if not self.config.search.enable_regex then
+    table.insert(args, "--fixed-strings")
+  end
+
+  return args
 end
 
 function NarrowEditor:search(query_term)
@@ -356,8 +422,7 @@ function NarrowEditor:search(query_term)
   Handle = vim.loop.spawn(
     "rg",
     {
-      --args = { query_term, "--word-regexp", "--smart-case", "--vimgrep", "-M", "1024" },
-      args = { query_term, "--smart-case", "--vimgrep", "-M", "1024" },
+      args = self:build_rg_args(query_term),
       stdio = { nil, stdout, stderr },
     },
     vim.schedule_wrap(function()
@@ -420,7 +485,7 @@ function NarrowEditor:on_key(key)
     else
       self.results_window:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
       self.entry_header_window:clear()
-      self.hud_window:clear()
+      self:_render_hud()
     end
   end, 5)
 end

@@ -48,6 +48,23 @@ M.array.index_of = function(array, target)
   return -1
 end
 
+M.array.merge = function(into_table, from_table)
+  if type(into_table) ~= "table" or type(from_table) ~= "table" then
+    return into_table
+  end
+
+  for k, v in pairs(from_table) do
+    if type(v) == "table" then
+      if into_table[k] == nil then into_table[k] = {} end
+
+      M.array.merge(into_table[k], from_table[k])
+    else
+      into_table[k] = v
+    end
+  end
+
+  return into_table
+end
 
 M.get_parser = function(result_header)
   -- TODO: do this correctly

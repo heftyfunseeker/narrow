@@ -103,7 +103,6 @@ function Window:clear(additional_namespaces)
   if additional_namespaces == nil then return end
 
   for _, namespace in ipairs(additional_namespaces) do
-    print("clearing namespace")
     api.nvim_buf_clear_namespace(self.buf, namespace, 0, -1)
   end
 end
