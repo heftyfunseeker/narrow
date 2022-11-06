@@ -35,16 +35,12 @@ M.close = function()
   end
 end
 
-M.goto_result = function()
-  local result = narrow_editor:get_result()
-  if result == nil then
-    return
+M.select = function()
+  if narrow_editor then
+    if narrow_editor:on_selected() then
+      M.close()
+    end
   end
-
-  M.close()
-
-  api.nvim_command("edit " .. result.header)
-  api.nvim_win_set_cursor(0, { result.row, result.column - 1 })
 end
 
 M.update_real_file = function()

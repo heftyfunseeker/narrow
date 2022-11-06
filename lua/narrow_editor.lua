@@ -3,12 +3,67 @@ local Window = require("window")
 local Layout = require("gui.layout")
 local Canvas = require("gui.canvas")
 local Text = require("gui.text")
-local devicons = require("nvim-web-devicons")
-local Search = require("provider.search_provider")
+local SearchProvider = require("provider.search_provider")
 
 local api = vim.api
 
 local NarrowEditor = {}
+
+function NarrowEditor:new(config)
+  local new_obj = {
+    current_provider = nil,
+
+    layout = nil,
+    hud_window = nil,
+    input_window = nil,
+    results_window = nil,
+
+    namespace_id = api.nvim_create_namespace("narrow"),
+    entry_header_namespace_id = api.nvim_create_namespace("narrow/entry/header"),
+    entry_result_namespace_id = api.nvim_create_namespace("narrow/entry/result"),
+
+    config = {},
+    debounce_count = 0,
+
+    -- restore user config
+    wo = {
+      number = vim.wo.number,
+      relativenumber = vim.wo.relativenumber,
+    },
+  }
+  self.__index = self
+  setmetatable(new_obj, self)
+
+  new_obj.prev_win = api.nvim_get_current_win()
+
+  vim.wo.number = false
+  vim.wo.relativenumber = false
+
+  new_obj:_build_layout(config)
+  new_obj:_set_keymaps(config)
+  new_obj:_init_provider(config)
+
+  return new_obj
+end
+
+function NarrowEditor:drop()
+  self.entry_header_window:drop()
+  self.entry_header_window = nil
+
+  self.results_window:drop()
+  self.results_window = nil
+
+  self.input_window:drop()
+  self.input_window = nil
+
+  self.hud_window:drop()
+  self.hud_window = nil
+
+  self.layout = nil
+
+  vim.wo.number = self.wo.number
+  vim.wo.relativenumber = self.wo.relativenumber
+end
 
 -- creates the results and preview buffers/windows
 function NarrowEditor:_build_layout(config)
@@ -68,7 +123,6 @@ function NarrowEditor:_build_layout(config)
 
   -- create floating window hud
   self.hud_window = hud_window
-  self:_render_hud()
 
   -- input
   self.input_window = input_window
@@ -80,60 +134,6 @@ function NarrowEditor:_build_layout(config)
   api.nvim_buf_add_highlight(self.input_window.buf, -1, "HUD", 0, 0, prompt_text:len())
 
   api.nvim_command("startinsert")
-end
-
-function NarrowEditor:_render_hud()
-  self.hud_window:clear()
-
-  if self.results_window == nil then return end
-
-  local namespace_id = self.entry_result_namespace_id
-
-  local entry = self.results_window:get_entry_at_cursor(namespace_id)
-  if entry == nil then
-    namespace_id = self.entry_header_namespace_id
-    entry = self.results_window:get_entry_at_cursor(namespace_id)
-  end
-
-  local canvas = Canvas:new()
-
-  -- results
-  if entry ~= nil then
-    local entry_index = entry[1] -- id is the index in namespace
-    local entries = self.results_window:get_all_entries(namespace_id)
-    local hud_width, _ = self.hud_window:get_dimensions()
-
-    Text
-        :new()
-        :set_text(string.format("%d/%d  ", entry_index, #entries))
-        :set_alignment(Text.AlignmentType.right)
-        :set_pos(0, 0)
-        :set_dimensions(hud_width, 1)
-        :render(canvas)
-  end
-
-  -- search config
-  local btn_hl = "Identifier"
-  if self.config.search.enable_regex then
-    btn_hl = "Function"
-  end
-  Text
-      :new()
-      :set_text("|")
-      :apply_style(Style.Types.highlight, { hl_name = btn_hl })
-      :set_pos(0, 0)
-      :render(canvas)
-
-  Text
-      :new()
-      :set_text("regex")
-      :set_pos(1, 0)
-      :apply_style(Style.Types.highlight, { hl_name = "Identifier" })
-      :render(canvas)
-
-  -- @todo: lets have the window take a canvas instead to render
-  -- api kinda ping pongs
-  canvas:render_to_window(self.hud_window)
 end
 
 -- should we instead expose se.get_results_buf()?
@@ -171,7 +171,7 @@ function NarrowEditor:_set_keymaps(config)
     self.results_window.buf,
     "n",
     "<CR>",
-    ':lua require("narrow").goto_result() <CR>',
+    ':lua require("narrow").select() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(
@@ -190,66 +190,16 @@ function NarrowEditor:_set_keymaps(config)
   )
 end
 
-local function get_default_config()
-  return {
-    search = {
-      enable_regex = false
-    }
+function NarrowEditor:_init_provider(config)
+  local editor_context = {
+    results_canvas = Canvas:new(self.results_window),
+    hud_canvas = Canvas:new(self.hud_window),
+    header_canvas = Canvas:new(self.entry_header_window),
+    entry_header_namespace_id = self.entry_header_namespace_id,
+    entry_result_namespace_id = self.entry_result_namespace_id,
   }
-end
 
-function NarrowEditor:new(config)
-  local new_obj = {
-    layout = nil,
-    hud_window = nil,
-    input_window = nil,
-    results_window = nil,
-
-    -- state ---------
-    namespace_id = api.nvim_create_namespace("narrow"),
-    entry_header_namespace_id = api.nvim_create_namespace("narrow/entry/header"),
-    entry_result_namespace_id = api.nvim_create_namespace("narrow/entry/result"),
-    -- @todo: build defaults
-    config = get_default_config(),
-    narrow_results = {},
-    query = {},
-    debounce_count = 0,
-    -- restore user config
-    wo = {
-      number = vim.wo.number,
-      relativenumber = vim.wo.relativenumber,
-    },
-  }
-  self.__index = self
-  setmetatable(new_obj, self)
-
-  vim.wo.number = false
-  vim.wo.relativenumber = false
-
-  new_obj:_build_layout(config)
-  new_obj:_set_keymaps(config)
-
-  return new_obj
-end
-
-function NarrowEditor:drop()
-  self.entry_header_window:drop()
-  self.entry_header_window = nil
-
-  self.results_window:drop()
-  self.results_window = nil
-
-  self.input_window:drop()
-  self.input_window = nil
-
-  self.hud_window:drop()
-  self.hud_window = nil
-
-  self.layout = nil
-  self.narrow_results = {}
-
-  vim.wo.number = self.wo.number
-  vim.wo.relativenumber = self.wo.relativenumber
+  self.current_provider = SearchProvider:new(editor_context)
 end
 
 function NarrowEditor:get_config()
@@ -259,33 +209,31 @@ end
 function NarrowEditor:apply_config(config)
   narrow_utils.array.merge(self.config, config)
 
-  -- apply any visual updates to the hud
-  if self.hud_window then
-    self:_render_hud()
-  end
+  -- -- apply any visual updates to the hud
+  -- if self.hud_window then
+  --   self:_render_hud()
+  -- end
 end
 
 function NarrowEditor:resize()
   if self.layout then
     self.layout:render()
-    self:_render_hud()
   end
 end
 
 function NarrowEditor:on_cursor_moved()
-  self:_render_hud()
+  -- self:_render_hud()
 end
 
-function NarrowEditor:get_result()
-  if self.results_window == nil then return nil end
+function NarrowEditor:on_selected()
+  if self.results_window == nil then return false end
 
   local entry = self.results_window:get_entry_at_cursor(self.entry_result_namespace_id)
-  if entry == nil then return end
+  if entry == nil then return false end
 
-  local result = self.narrow_results[entry[1]]
-  if result == nil then return nil end
+  if not self.current_provider then return false end
 
-  return result
+  return self.current_provider:on_selected(entry, self.prev_win)
 end
 
 function NarrowEditor:set_focus_results_window()
@@ -294,95 +242,6 @@ end
 
 function NarrowEditor:set_focus_input_window()
   api.nvim_set_current_win(self.input_window.win)
-end
-
-function NarrowEditor:render_results()
-  self.results_window:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
-
-  local canvas = Canvas:new()
-  local header_canvas = Canvas:new()
-
-  local headers_processed = {}
-
-  local row = 0
-  local entry_result_index = 1
-  local entry_header_index = 1
-  for _, result in ipairs(self.narrow_results) do
-    if result.header and headers_processed[result.header] == nil then
-      headers_processed[result.header] = true
-
-      local icon, hl_name = devicons.get_icon(
-        result.header,
-        narrow_utils.get_file_extension(result.header),
-        { default = true }
-      )
-      Text:new()
-          :set_text(icon)
-          :set_pos(0, row)
-          :apply_style(Style.Types.virtual_text, { hl_name = hl_name, pos_type = "overlay" })
-          :render(canvas)
-
-      Text:new()
-          :set_text(" " .. result.header)
-          :set_pos(1, row)
-          :apply_style(Style.Types.virtual_text, { hl_name = "NarrowHeader", pos_type = "overlay" })
-          :mark_entry(entry_header_index, self.entry_header_namespace_id)-- mark this as a selectable entry
-          :render(canvas)
-
-      row = row + 1
-      entry_header_index = entry_header_index + 1
-    end
-
-    Text:new()
-        :set_text(result.entry_text)
-        :set_pos(0, row)
-        :mark_entry(entry_result_index, self.entry_result_namespace_id)-- mark this as a selectable entry
-        :render(canvas)
-
-    Text:new()
-        :set_text(self:get_query_result(result.entry_text, result.column))
-        :set_pos(result.column - 1, row)
-        :apply_style(Style.Types.highlight, { hl_name = "NarrowMatch" })
-        :render(canvas)
-
-    Text:new()
-        :set_text(result.entry_header)
-        :set_dimensions(5, 1)
-        :set_alignment(Text.AlignmentType.right)
-        :set_pos(0, row)
-        :apply_style(Style.Types.virtual_text, { hl_name = "Comment", pos_type = "overlay" })
-        :render(header_canvas)
-
-    row = row + 1
-    entry_result_index = entry_result_index + 1
-  end
-
-  canvas:render_to_window(self.results_window)
-  header_canvas:render_to_window(self.entry_header_window)
-
-  self:_render_hud()
-end
-
--- @todo: deprecate once we're parsing json
-function NarrowEditor:get_query_result(line, start)
-  local is_case_insensitive = string.match(self.query, "%u") == nil
-  local target = line
-  if is_case_insensitive then
-    target = string.lower(line)
-  end
-
-  local query = self.query
-  local matches = 0
-  local use_fixed_strings = not self.config.search.enable_regex
-  if not use_fixed_strings then
-    query, matches = string.gsub(query, "\\", "%")
-  end
-  local i, j = string.find(target, query, start - 1, use_fixed_strings)
-  if i == nil or j == nil then
-    print("error: could not resolve the narrow query result: " .. query)
-    return query -- just return the query to see what happened
-  end
-  return line:sub(i, j + matches)
 end
 
 function NarrowEditor:on_key(key)
@@ -413,17 +272,7 @@ function NarrowEditor:on_key(key)
     local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
     local _, e = string.find(query, prompt_text)
     query = query:sub(e + 1)
-    self.query = query
-    if query ~= nil and #query >= 2 then
-      Search.search(query, function(results)
-        self.narrow_results = results
-        self:render_results()
-      end)
-    else
-      self.results_window:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
-      self.entry_header_window:clear()
-      self:_render_hud()
-    end
+    self.current_provider:on_query_updated(query)
   end, 5)
 end
 

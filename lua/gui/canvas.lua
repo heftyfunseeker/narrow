@@ -2,8 +2,9 @@ local Style = require("gui.style")
 
 Canvas = {}
 
-function Canvas:new()
+function Canvas:new(window)
   local new_obj = {
+    window = window,
     -- sparse array of lines
     lines = {},
     row_max = 0,
@@ -53,7 +54,7 @@ function Canvas:add_entry(entry)
   table.insert(self.entries, entry)
 end
 
-function Canvas:render_to_window(window)
+function Canvas:render()
   -- lines array/obj is sparse, so iterate over it and add filler empty lines where needed
   local render_lines = {}
   for row = 0, self.row_max do
@@ -64,22 +65,33 @@ function Canvas:render_to_window(window)
     end
   end
 
-  window:set_lines(render_lines)
+  self.window:set_lines(render_lines)
 
   -- apply styles
   for _, style in ipairs(self.styles) do
     if style.type == Style.Types.highlight then
       -- make highlight call to window
-      window:add_highlight(style.name, style.pos)
+      self.window:add_highlight(style.name, style.pos)
     elseif style.type == Style.Types.virtual_text then
-      window:add_virtual_text(style.text, style.name, style.pos)
+      self.window:add_virtual_text(style.text, style.name, style.pos)
     end
   end
 
   -- apply entry identifiers
   for _, entry in ipairs(self.entries) do
-    window:add_entry(entry.id, entry.pos, entry.entry_namespace)
+    self.window:add_entry(entry.id, entry.pos, entry.entry_namespace)
   end
+end
+
+-- @todo: lets have the canvas cache all used namespaces to do this book keeping for us
+function Canvas:clear(additional_namespaces)
+  self.window:clear(additional_namespaces)
+
+  self.lines = {}
+  self.row_max = 0
+
+  self.styles = {}
+  self.entries = {}
 end
 
 return Canvas

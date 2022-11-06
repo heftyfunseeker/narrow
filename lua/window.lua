@@ -161,8 +161,8 @@ function Window:get_entry_at_row(row, namespace)
     namespace = entry_namespace_id
   end
 
-  -- we could eventually support entry
-  return api.nvim_buf_get_extmarks(self.buf, namespace, { row, 0 }, { row, -1 }, { limit = 1 })[1]
+  local entries = api.nvim_buf_get_extmarks(self.buf, namespace, { row, 0 }, { row, -1 }, { limit = 1 })
+  return entries[1]
 end
 
 function Window:get_all_entries(namespace)
