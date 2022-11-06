@@ -1,10 +1,10 @@
 local narrow_utils = require("narrow_utils")
-local NarrowResult = require("narrow_result")
 local Window = require("window")
 local Layout = require("gui.layout")
 local Canvas = require("gui.canvas")
 local Text = require("gui.text")
 local devicons = require("nvim-web-devicons")
+local Search = require("provider.search_provider")
 
 local api = vim.api
 
@@ -57,7 +57,7 @@ function NarrowEditor:_build_layout(config)
   self.results_window:set_lines({})
 
   api.nvim_buf_attach(self.results_window.buf, false, {
-    on_detach = function(detach_str, buf_handle)
+    on_detach = function(_, _)
       vim.on_key(nil, self.namespace_id)
     end,
   })
@@ -190,7 +190,7 @@ function NarrowEditor:_set_keymaps(config)
   )
 end
 
-function get_default_config()
+local function get_default_config()
   return {
     search = {
       enable_regex = false
@@ -296,18 +296,6 @@ function NarrowEditor:set_focus_input_window()
   api.nvim_set_current_win(self.input_window.win)
 end
 
-function NarrowEditor:add_grep_result(grep_results)
-  local vals = vim.split(grep_results, "\n")
-  for _, line in pairs(vals) do
-    if line ~= "" then
-      local result = NarrowResult:new(line)
-      if result then
-        table.insert(self.narrow_results, result)
-      end
-    end
-  end
-end
-
 function NarrowEditor:render_results()
   self.results_window:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
 
@@ -397,60 +385,6 @@ function NarrowEditor:get_query_result(line, start)
   return line:sub(i, j + matches)
 end
 
-function NarrowEditor:build_rg_args(query_term)
-  local args = { query_term, "--smart-case", "--vimgrep", "-M", "1024" }
-
-  if not self.config.search.enable_regex then
-    table.insert(args, "--fixed-strings")
-  end
-
-  return args
-end
-
-function NarrowEditor:search(query_term)
-  -- clear previous results out
-  self.narrow_results = {}
-
-  local stdout = vim.loop.new_pipe(false)
-  local stderr = vim.loop.new_pipe(false)
-
-  if Handle ~= nil then
-    Handle:close()
-    Handle = nil
-  end
-
-  Handle = vim.loop.spawn(
-    "rg",
-    {
-      args = self:build_rg_args(query_term),
-      stdio = { nil, stdout, stderr },
-    },
-    vim.schedule_wrap(function()
-      stdout:read_stop()
-      stderr:read_stop()
-      stdout:close()
-      stderr:close()
-      Handle:close()
-      Handle = nil
-
-      self:render_results()
-    end)
-  )
-
-  local onread = function(err, input_stream)
-    if err then
-      print("ERROR: ", err)
-    end
-
-    if input_stream then
-      self:add_grep_result(input_stream)
-    end
-  end
-
-  vim.loop.read_start(stdout, onread)
-  vim.loop.read_start(stderr, onread)
-end
-
 function NarrowEditor:on_key(key)
   local escape_key = "\27"
   if key == escape_key then
@@ -481,7 +415,10 @@ function NarrowEditor:on_key(key)
     query = query:sub(e + 1)
     self.query = query
     if query ~= nil and #query >= 2 then
-      self:search(query)
+      Search.search(query, function(results)
+        self.narrow_results = results
+        self:render_results()
+      end)
     else
       self.results_window:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
       self.entry_header_window:clear()
