@@ -1,0 +1,3 @@
+{"type":"match","data":{"path":{"text":"crates/json_deflate_models/src/samples/content_api/collection_by_slug_home-all.json"},"lines":{"text":"                                            \"href\": \"https://global.edge.bamgri
+d.com/media/0c75ef98-82bf-4834-a259-12d9decf2ab0/scenarios/{scenario}\",\n"},"line_number":1984,"absolute_offset":114562,"submatches":[{"match":{"text":"com"}eight of welcome layout\", ?height, ?top_y);\n"},"line_number":546,"absolute_offset":
+23248,"submatches":[{"match":{"text":"co"},"start":57,"end":59}]}} 

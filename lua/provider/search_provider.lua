@@ -3,6 +3,7 @@ local Utils = require("narrow_utils")
 local Devicons = require("nvim-web-devicons")
 local Canvas = require("gui.canvas")
 local Text = require("gui.text")
+local RipgrepParser = require("provider.ripgrep_parser")
 local api = vim.api
 
 local SearchProvider = {}
@@ -21,6 +22,8 @@ function SearchProvider:new(editor_context)
   new_obj.entry_result_namespace_id = editor_context.entry_result_namespace_id
 
   new_obj.results = nil
+
+  new_obj.ripgrep_parser = RipgrepParser:new()
 
   return setmetatable(new_obj, self)
 end
@@ -47,7 +50,7 @@ function SearchProvider:on_selected(entry, prev_win)
 end
 
 SearchProvider.build_rg_args = function(query_term, options)
-  local args = { query_term, "--smart-case", "--vimgrep", "-M", "1024" }
+  local args = { query_term, "--smart-case", "--json" }
 
   if options and not options.enable_regex then
     table.insert(args, "--fixed-strings")
@@ -61,7 +64,6 @@ function SearchProvider:search(query_term)
   self.results = {}
 
   local stdout = vim.loop.new_pipe(false)
-  local stderr = vim.loop.new_pipe(false)
 
   if Handle ~= nil then
     Handle:close()
@@ -72,17 +74,15 @@ function SearchProvider:search(query_term)
     "rg",
     {
       args = SearchProvider.build_rg_args(query_term),
-      stdio = { nil, stdout, stderr },
+      stdio = { nil, stdout },
     },
     vim.schedule_wrap(function()
       stdout:read_stop()
-      stderr:read_stop()
       stdout:close()
-      stderr:close()
       Handle:close()
       Handle = nil
 
-      self:render_results()
+      self.ripgrep_parser:parse_messages(self.results)
     end)
   )
 
@@ -92,12 +92,12 @@ function SearchProvider:search(query_term)
     end
 
     if input_stream then
-      self:add_grep_result(input_stream)
+      -- print(vim.inspect(input_stream))
+      self.ripgrep_parser:parse_stream(input_stream)
     end
   end
 
   vim.loop.read_start(stdout, onread)
-  vim.loop.read_start(stderr, onread)
 end
 
 function SearchProvider:add_grep_result(grep_results)
