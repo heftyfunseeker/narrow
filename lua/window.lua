@@ -96,7 +96,6 @@ function Window:set_lines(lines)
 end
 
 function Window:clear(additional_namespaces)
-  api.nvim_buf_set_lines(self.buf, 0, -1, true, {})
   api.nvim_buf_clear_namespace(self.buf, namespace_id, 0, -1)
   api.nvim_buf_clear_namespace(self.buf, entry_namespace_id, 0, -1)
 
@@ -105,6 +104,8 @@ function Window:clear(additional_namespaces)
   for _, namespace in ipairs(additional_namespaces) do
     api.nvim_buf_clear_namespace(self.buf, namespace, 0, -1)
   end
+
+  api.nvim_buf_set_lines(self.buf, 0, -1, true, {})
 end
 
 -- returns the lines that were used in the last call to set_lines

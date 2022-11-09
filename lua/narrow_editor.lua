@@ -19,8 +19,8 @@ function NarrowEditor:new(config)
     results_window = nil,
 
     namespace_id = api.nvim_create_namespace("narrow"),
-    entry_header_namespace_id = api.nvim_create_namespace("narrow/entry/header"),
-    entry_result_namespace_id = api.nvim_create_namespace("narrow/entry/result"),
+    entry_header_namespace_id = api.nvim_create_namespace("narrow-entry-header"),
+    entry_result_namespace_id = api.nvim_create_namespace("narrow-entry-result"),
 
     config = {},
     debounce_count = 0,
@@ -219,10 +219,15 @@ function NarrowEditor:resize()
   if self.layout then
     self.layout:render()
   end
+  if self.current_provider then
+    self.current_provider:on_resized()
+  end
 end
 
 function NarrowEditor:on_cursor_moved()
-  -- self:_render_hud()
+  if not self.current_provider then return end
+
+  self.current_provider:on_cursor_moved()
 end
 
 function NarrowEditor:on_selected()

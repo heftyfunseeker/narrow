@@ -94,6 +94,19 @@ function Canvas:clear(additional_namespaces)
   self.entries = {}
 end
 
+function Canvas:get_dimensions()
+  return self.window:get_dimensions()
+end
+
+-- List of [extmark_id, row, col] tuples in "traversal order".
+function Canvas:get_entry_at_cursor(namespace)
+  return self.window:get_entry_at_cursor(namespace)
+end
+
+function Canvas:get_all_entries(namespace)
+  return self.window:get_all_entries(namespace)
+end
+
 return Canvas
 
 -- local header_text = Text:new({ text = line_header, style = "Function" })
