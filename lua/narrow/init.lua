@@ -27,7 +27,7 @@ end
 M.open = function()
   init_narrow()
 
-  local NarrowEditor = require("narrow_editor")
+  local NarrowEditor = require("narrow.narrow_editor")
   narrow_editor = NarrowEditor:new({})
 end
 
@@ -66,6 +66,7 @@ M.set_focus_input_window = function()
   end
 end
 
+-- TODO these should be private
 M.resize = function()
   if narrow_editor then
     narrow_editor:resize()

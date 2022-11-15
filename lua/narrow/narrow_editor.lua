@@ -1,9 +1,9 @@
-local narrow_utils = require("narrow_utils")
-local Window = require("window")
-local Layout = require("gui.layout")
-local Canvas = require("gui.canvas")
-local Text = require("gui.text")
-local SearchProvider = require("provider.search_provider")
+local narrow_utils = require("narrow.narrow_utils")
+local Window = require("narrow.window")
+local Layout = require("narrow.gui.layout")
+local Canvas = require("narrow.gui.canvas")
+local Text = require("narrow.gui.text")
+local SearchProvider = require("narrow.provider.search_provider")
 
 local api = vim.api
 

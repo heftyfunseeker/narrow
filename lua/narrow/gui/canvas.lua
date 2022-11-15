@@ -1,4 +1,4 @@
-local Style = require("gui.style")
+local Style = require("narrow.gui.style")
 
 Canvas = {}
 

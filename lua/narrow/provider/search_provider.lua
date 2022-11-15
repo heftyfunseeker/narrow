@@ -1,9 +1,9 @@
-local NarrowResult = require("narrow_result")
-local Utils = require("narrow_utils")
+local NarrowResult = require("narrow.narrow_result")
+local Utils = require("narrow.narrow_utils")
 local Devicons = require("nvim-web-devicons")
-local Canvas = require("gui.canvas")
-local Text = require("gui.text")
-local RipgrepParser = require("provider.ripgrep_parser")
+local Canvas = require("narrow.gui.canvas")
+local Text = require("narrow.gui.text")
+local RipgrepParser = require("narrow.provider.ripgrep_parser")
 local api = vim.api
 
 local SearchProvider = {}

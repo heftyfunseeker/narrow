@@ -1,5 +1,5 @@
 local api = vim.api
-local Window = require("window")
+local Window = require("narrow.window")
 
 HorizontalLayout = {}
 
