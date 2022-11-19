@@ -18,71 +18,93 @@ function init_narrow()
   vim.cmd([[
     augroup narrow
       au!
-      au VimResized * :lua require("narrow").resize()
-      au CursorMoved * :lua require("narrow").on_cursor_moved() 
+      au VimResized * :lua require("narrow")._resize()
+      au CursorMoved * :lua require("narrow")._on_cursor_moved() 
     augroup END
   ]])
 end
 
-M.open = function()
+M.setup = function(_config)
+  -- no impl
+end
+
+M.search_project = function()
   init_narrow()
 
   local NarrowEditor = require("narrow.narrow_editor")
-  narrow_editor = NarrowEditor:new({})
+  narrow_editor = NarrowEditor:new({
+    search = {
+      mode = NarrowEditor.SearchModes.Project
+    }
+  })
+end
+
+M.search_current_file = function()
+  local current_file = vim.api.nvim_buf_get_name(0)
+
+  init_narrow()
+
+  local NarrowEditor = require("narrow.narrow_editor")
+  narrow_editor = NarrowEditor:new({
+    search = {
+      mode = NarrowEditor.SearchModes.CurrentFile,
+      current_file = current_file
+    }
+  })
 end
 
 M.close = function()
   vim.cmd([[ au! narrow ]])
+  if not narrow_editor then return end
 
-  if narrow_editor then
-    narrow_editor:drop()
-    narrow_editor = nil
-  end
+  narrow_editor:drop()
+  narrow_editor = nil
 end
 
 M.select = function()
-  if narrow_editor then
-    if narrow_editor:on_selected() then
-      M.close()
-    end
+  if not narrow_editor then return end
+
+  if narrow_editor:on_selected() then
+    M.close()
   end
 end
 
 M.update_real_file = function()
-  if narrow_editor then
-    narrow_editor:update_real_file()
-  end
+  if not narrow_editor then return end
+
+  narrow_editor:update_real_file()
 end
 
 M.set_focus_results_window = function()
-  if narrow_editor then
-    narrow_editor:set_focus_results_window()
-  end
+  if not narrow_editor then return end
+
+  narrow_editor:set_focus_results_window()
 end
 
 M.set_focus_input_window = function()
-  if narrow_editor then
-    narrow_editor:set_focus_input_window()
-  end
-end
+  if not narrow_editor then return end
 
--- TODO these should be private
-M.resize = function()
-  if narrow_editor then
-    narrow_editor:resize()
-  end
-end
-
-M.on_cursor_moved = function()
-  if narrow_editor then
-    narrow_editor:on_cursor_moved()
-  end
+  narrow_editor:set_focus_input_window()
 end
 
 M.update_config = function(config)
-  if narrow_editor then
-    narrow_editor:apply_config(config)
-  end
+  if not narrow_editor then return end
+
+  narrow_editor:apply_config(config)
 end
+
+-- TODO these should be private
+M._resize = function()
+  if not narrow_editor then return end
+
+  narrow_editor:resize()
+end
+
+M._on_cursor_moved = function()
+  if not narrow_editor then return end
+
+  narrow_editor:on_cursor_moved()
+end
+
 
 return M

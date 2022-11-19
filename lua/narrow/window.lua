@@ -1,7 +1,7 @@
 local api = vim.api
 
 -- this is really a canvas, or the actual draw api :P
-Window = {}
+local Window = {}
 Window.__index = Window
 
 local namespace_id = api.nvim_create_namespace("narrow/window")
@@ -95,7 +95,7 @@ function Window:set_lines(lines)
   api.nvim_buf_set_lines(self.buf, 0, -1, true, lines)
 end
 
-function Window:clear(additional_namespaces)
+function Window:clear(additional_namespaces, only_namespaces)
   api.nvim_buf_clear_namespace(self.buf, namespace_id, 0, -1)
   api.nvim_buf_clear_namespace(self.buf, entry_namespace_id, 0, -1)
 
@@ -105,7 +105,9 @@ function Window:clear(additional_namespaces)
     api.nvim_buf_clear_namespace(self.buf, namespace, 0, -1)
   end
 
-  api.nvim_buf_set_lines(self.buf, 0, -1, true, {})
+  if not only_namespaces then
+    api.nvim_buf_set_lines(self.buf, 0, -1, true, {})
+  end
 end
 
 -- returns the lines that were used in the last call to set_lines

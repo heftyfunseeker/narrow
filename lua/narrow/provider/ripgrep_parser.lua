@@ -1,6 +1,4 @@
-local uv = vim.loop
-
-RipgrepParser = {}
+local RipgrepParser = {}
 RipgrepParser.__index = RipgrepParser
 
 function RipgrepParser:new()

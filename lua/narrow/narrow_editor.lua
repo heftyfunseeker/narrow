@@ -2,12 +2,16 @@ local narrow_utils = require("narrow.narrow_utils")
 local Window = require("narrow.window")
 local Layout = require("narrow.gui.layout")
 local Canvas = require("narrow.gui.canvas")
-local Text = require("narrow.gui.text")
 local SearchProvider = require("narrow.provider.search_provider")
 
 local api = vim.api
 
-local NarrowEditor = {}
+local NarrowEditor = {
+  SearchModes = {
+    Project = 0,
+    CurrentFile = 1,
+  }
+}
 
 function NarrowEditor:new(config)
   local new_obj = {
@@ -24,20 +28,11 @@ function NarrowEditor:new(config)
 
     config = {},
     debounce_count = 0,
-
-    -- restore user config
-    wo = {
-      number = vim.wo.number,
-      relativenumber = vim.wo.relativenumber,
-    },
   }
   self.__index = self
   setmetatable(new_obj, self)
 
   new_obj.prev_win = api.nvim_get_current_win()
-
-  vim.wo.number = false
-  vim.wo.relativenumber = false
 
   new_obj:_build_layout(config)
   new_obj:_set_keymaps(config)
@@ -60,9 +55,6 @@ function NarrowEditor:drop()
   self.hud_window = nil
 
   self.layout = nil
-
-  vim.wo.number = self.wo.number
-  vim.wo.relativenumber = self.wo.relativenumber
 end
 
 -- creates the results and preview buffers/windows
@@ -89,14 +81,14 @@ function NarrowEditor:_build_layout(config)
       :set_buf_option("bufhidden", "wipe")
       :set_buf_option("buftype", "nofile")
       :set_buf_option("swapfile", false)
-      :set_border({ "", "─", "╮", "│", "", "", "", "" })
+      :set_border({ "╭", "─", "╮", "│", "", "", "╰", "│" })
 
   local input_window = Window
       :new()
       :set_buf_option("bufhidden", "wipe")
       :set_buf_option("buftype", "prompt")
       :set_buf_option("swapfile", false)
-      :set_border({ "╭", "─", "", "", " ", "", "", "│" })
+      :set_border({ "╭", "─", "╮", "│", "╯", "─", "╰", "│" })
 
   self.layout = Layout
       :new()
@@ -195,8 +187,12 @@ function NarrowEditor:_init_provider(config)
     results_canvas = Canvas:new(self.results_window),
     hud_canvas = Canvas:new(self.hud_window),
     header_canvas = Canvas:new(self.entry_header_window),
+    input_canvas = Canvas:new(self.input_window),
+
     entry_header_namespace_id = self.entry_header_namespace_id,
     entry_result_namespace_id = self.entry_result_namespace_id,
+
+    config = config
   }
 
   self.current_provider = SearchProvider:new(editor_context)

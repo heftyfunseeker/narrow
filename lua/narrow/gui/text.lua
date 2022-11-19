@@ -1,6 +1,6 @@
 local Style = require("narrow.gui.style")
 
-Text = {
+local Text = {
   AlignmentType = {
     center = 0,
     right = 1

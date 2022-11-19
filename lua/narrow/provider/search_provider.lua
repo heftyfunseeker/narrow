@@ -3,6 +3,7 @@ local Utils = require("narrow.narrow_utils")
 local Devicons = require("nvim-web-devicons")
 local Canvas = require("narrow.gui.canvas")
 local Text = require("narrow.gui.text")
+local Button = require("narrow.gui.button")
 local RipgrepParser = require("narrow.provider.ripgrep_parser")
 local api = vim.api
 
@@ -16,12 +17,15 @@ function SearchProvider:new(editor_context)
   new_obj.results_canvas = editor_context.results_canvas
   new_obj.header_canvas = editor_context.header_canvas
   new_obj.hud_canvas = editor_context.hud_canvas
+  new_obj.input_canvas = editor_context.input_canvas
 
   new_obj.entry_header_namespace_id = editor_context.entry_header_namespace_id
   new_obj.entry_result_namespace_id = editor_context.entry_result_namespace_id
 
   new_obj.results = nil
   new_obj.entry_to_result = nil
+
+  new_obj.config = editor_context.config
 
   new_obj.ripgrep_parser = RipgrepParser:new()
 
@@ -63,11 +67,15 @@ function SearchProvider:on_resized()
   self:render_hud()
 end
 
-local function build_rg_args(query_term, options)
+function SearchProvider:build_rg_args(query_term)
   local args = { query_term, "--smart-case", "--json" }
 
-  if options and not options.enable_regex then
+  if self.config and not self.config.enable_regex then
     table.insert(args, "--fixed-strings")
+  end
+
+  if self.config and self.config.search.mode == 1 then
+    table.insert(args, self.config.search.current_file)
   end
 
   return args
@@ -78,8 +86,8 @@ function SearchProvider:search(query_term)
   self.results = {}
   self.ripgrep_parser:reset()
 
-  if stdout ~= nil then
-    stdout:read_stop()
+  if Stdout ~= nil then
+    Stdout:read_stop()
   end
 
   if Handle ~= nil then
@@ -87,17 +95,17 @@ function SearchProvider:search(query_term)
     Handle = nil
   end
 
-  stdout = vim.loop.new_pipe(false)
+  Stdout = vim.loop.new_pipe(false)
   Handle = vim.loop.spawn(
     "rg",
     {
-      args = build_rg_args(query_term),
-      stdio = { nil, stdout },
+      args = self:build_rg_args(query_term),
+      stdio = { nil, Stdout },
     },
     vim.schedule_wrap(function()
-      stdout:read_stop()
-      stdout:close()
-      stdout = nil
+      Stdout:read_stop()
+      Stdout:close()
+      Stdout = nil
       Handle:close()
       Handle = nil
 
@@ -115,7 +123,7 @@ function SearchProvider:search(query_term)
     end
   end)
 
-  vim.loop.read_start(stdout, onread)
+  vim.loop.read_start(Stdout, onread)
 end
 
 function SearchProvider:render_rg_messages()
@@ -196,6 +204,12 @@ end
 
 function SearchProvider:render_hud()
   self.hud_canvas:clear()
+  self.input_canvas:clear(nil, true)
+
+  -- Button
+  --     :new()
+  --     :set_pos(0, 0)
+  --     :render(self.hud_canvas)
 
   local namespace_id = self.entry_result_namespace_id
 
@@ -209,16 +223,18 @@ function SearchProvider:render_hud()
   if entry ~= nil then
     local entry_index = entry[1] -- id is the index in namespace
     local entries = self.results_canvas:get_all_entries(namespace_id)
-    local hud_width, _ = self.hud_canvas:get_dimensions()
+    local input_width, _ = self.input_canvas:get_dimensions()
 
     Text
         :new()
         :set_text(string.format("%d/%d  ", entry_index, #entries))
+        :apply_style(Style.Types.virtual_text, { hl_name = "Comment", pos_type = "overlay" })
         :set_alignment(Text.AlignmentType.right)
-        :set_pos(0, 0)
-        :set_dimensions(hud_width, 1)
-        :render(self.hud_canvas)
+        :set_dimensions(8, 1)
+        :set_pos(input_width - 8, 0)
+        :render(self.input_canvas)
   end
+
 
   -- search config
   -- local btn_hl = "Identifier"
@@ -240,6 +256,7 @@ function SearchProvider:render_hud()
   --     :render(self.hud_canvas)
 
   self.hud_canvas:render()
+  self.input_canvas:render(true)
 end
 
 return SearchProvider

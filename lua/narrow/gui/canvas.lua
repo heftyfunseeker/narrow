@@ -1,6 +1,6 @@
 local Style = require("narrow.gui.style")
 
-Canvas = {}
+local Canvas = {}
 
 function Canvas:new(window)
   local new_obj = {
@@ -54,7 +54,7 @@ function Canvas:add_entry(entry)
   table.insert(self.entries, entry)
 end
 
-function Canvas:render()
+function Canvas:render(only_styles)
   -- lines array/obj is sparse, so iterate over it and add filler empty lines where needed
   local render_lines = {}
   for row = 0, self.row_max do
@@ -65,7 +65,9 @@ function Canvas:render()
     end
   end
 
-  self.window:set_lines(render_lines)
+  if not only_styles then
+    self.window:set_lines(render_lines)
+  end
 
   -- apply styles
   for _, style in ipairs(self.styles) do
@@ -84,8 +86,8 @@ function Canvas:render()
 end
 
 -- @todo: lets have the canvas cache all used namespaces to do this book keeping for us
-function Canvas:clear(additional_namespaces)
-  self.window:clear(additional_namespaces)
+function Canvas:clear(additional_namespaces, only_styles)
+  self.window:clear(additional_namespaces, only_styles)
 
   self.lines = {}
   self.row_max = 0
