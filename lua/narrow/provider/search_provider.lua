@@ -1,10 +1,9 @@
-local NarrowResult = require("narrow.narrow_result")
 local Utils = require("narrow.narrow_utils")
 local Devicons = require("nvim-web-devicons")
-local Canvas = require("narrow.gui.canvas")
 local Text = require("narrow.gui.text")
 local Button = require("narrow.gui.button")
 local RipgrepParser = require("narrow.provider.ripgrep_parser")
+
 local api = vim.api
 
 local SearchProvider = {}
@@ -12,24 +11,48 @@ SearchProvider.__index = SearchProvider
 
 -- ProviderInterface
 function SearchProvider:new(editor_context)
-  local new_obj = {}
-  -- get render_contexts
-  new_obj.results_canvas = editor_context.results_canvas
-  new_obj.header_canvas = editor_context.header_canvas
-  new_obj.hud_canvas = editor_context.hud_canvas
-  new_obj.input_canvas = editor_context.input_canvas
-
-  new_obj.entry_header_namespace_id = editor_context.entry_header_namespace_id
-  new_obj.entry_result_namespace_id = editor_context.entry_result_namespace_id
+  local new_obj = Utils.array.shallow_copy(editor_context)
 
   new_obj.results = nil
   new_obj.entry_to_result = nil
 
-  new_obj.config = editor_context.config
-
   new_obj.ripgrep_parser = RipgrepParser:new()
 
+  new_obj.store:subscribe(function()
+    new_obj:on_store_updated()
+  end)
+
   return setmetatable(new_obj, self)
+end
+
+function SearchProvider:handle_action(state, action)
+  local action_map = {
+    init_store = function(_)
+      return {
+        enable_regex = false -- @todo: come from config
+      }
+    end,
+
+    toggle_regex = function(_)
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.enable_regex = not new_state.enable_regex
+      return new_state
+    end,
+
+    query_updated = function(query)
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.query = query
+      return new_state
+    end
+  }
+
+  return action_map[action.type](action.payload)
+end
+
+function SearchProvider:on_store_updated()
+  local state = self.store:get_state()
+
+  self:search(state.query)
 end
 
 function SearchProvider:on_query_updated(query)
@@ -70,7 +93,7 @@ end
 function SearchProvider:build_rg_args(query_term)
   local args = { query_term, "--smart-case", "--json" }
 
-  if self.config and not self.config.enable_regex then
+  if self.config and not self.store:get_state().enable_regex then
     table.insert(args, "--fixed-strings")
   end
 
@@ -110,6 +133,7 @@ function SearchProvider:search(query_term)
       Handle = nil
 
       self:render_rg_messages()
+      self.prev_query_term = query_term
     end)
   )
 
@@ -151,13 +175,13 @@ function SearchProvider:render_rg_messages()
       Text:new()
           :set_text(icon)
           :set_pos(0, row)
-          :apply_style(Style.Types.virtual_text, { hl_name = hl_name, pos_type = "overlay" })
+          :apply_style({ type = Style.Types.virtual_text, hl_name = hl_name, pos_type = "overlay" })
           :render(self.results_canvas)
 
       Text:new()
           :set_text(" " .. path)
           :set_pos(1, row)
-          :apply_style(Style.Types.virtual_text, { hl_name = "NarrowHeader", pos_type = "overlay" })
+          :apply_style({ type = Style.Types.virtual_text, hl_name = "NarrowHeader", pos_type = "overlay" })
           :mark_entry(entry_header_index, self.entry_header_namespace_id)
           :render(self.results_canvas)
 
@@ -176,7 +200,7 @@ function SearchProvider:render_rg_messages()
         Text:new()
             :set_text(match.match.text)
             :set_pos(match.start, row)
-            :apply_style(Style.Types.highlight, { hl_name = "NarrowMatch" })
+            :apply_style({ type = Style.Types.highlight, hl_name = "NarrowMatch" })
             :mark_entry(entry_result_index, self.entry_result_namespace_id)-- mark this as a selectable entry
             :render(self.results_canvas)
       end
@@ -187,7 +211,7 @@ function SearchProvider:render_rg_messages()
           :set_dimensions(5, 1)
           :set_alignment(Text.AlignmentType.right)
           :set_pos(0, row)
-          :apply_style(Style.Types.virtual_text, { hl_name = "Comment", pos_type = "overlay" })
+          :apply_style({ type = Style.Types.virtual_text, hl_name = "Comment", pos_type = "overlay" })
           :render(self.header_canvas)
 
       self.entry_to_result[entry_result_index] = rg_message
@@ -206,11 +230,6 @@ function SearchProvider:render_hud()
   self.hud_canvas:clear()
   self.input_canvas:clear(nil, true)
 
-  -- Button
-  --     :new()
-  --     :set_pos(0, 0)
-  --     :render(self.hud_canvas)
-
   local namespace_id = self.entry_result_namespace_id
 
   local entry = self.results_canvas:get_entry_at_cursor(namespace_id)
@@ -228,32 +247,27 @@ function SearchProvider:render_hud()
     Text
         :new()
         :set_text(string.format("%d/%d  ", entry_index, #entries))
-        :apply_style(Style.Types.virtual_text, { hl_name = "Comment", pos_type = "overlay" })
+        :apply_style({ type = Style.Types.virtual_text, hl_name = "Comment", pos_type = "overlay" })
         :set_alignment(Text.AlignmentType.right)
         :set_dimensions(8, 1)
         :set_pos(input_width - 8, 0)
         :render(self.input_canvas)
   end
 
+  local input_width, _ = self.input_canvas:get_dimensions()
+  local style
+  if self.store:get_state().enable_regex then
+    style = { type = Style.Types.highlight, hl_name = "Function" }
+  else
+    style = { type = Style.Types.highlight, hl_name = "Comment" }
+  end
 
-  -- search config
-  -- local btn_hl = "Identifier"
-  -- -- if self.config.search.enable_regex then
-  -- --   btn_hl = "Function"
-  -- -- end
-  -- Text
-  --     :new()
-  --     :set_text("|")
-  --     :apply_style(Style.Types.highlight, { hl_name = btn_hl })
-  --     :set_pos(0, 0)
-  --     :render(self.hud_canvas)
-  --
-  -- Text
-  --     :new()
-  --     :set_text("regex")
-  --     :set_pos(1, 0)
-  --     :apply_style(Style.Types.highlight, { hl_name = "Identifier" })
-  --     :render(self.hud_canvas)
+  Button
+      :new()
+      :set_pos(input_width + 4, 0)
+      :apply_style(style)
+      :set_text(Text:new():set_text("regex"))
+      :render(self.hud_canvas)
 
   self.hud_canvas:render()
   self.input_canvas:render(true)

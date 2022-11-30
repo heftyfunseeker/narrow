@@ -28,8 +28,8 @@ function Text:set_text(text)
   return self
 end
 
-function Text:apply_style(type, props)
-  self.style = { type = type, props = props }
+function Text:apply_style(style)
+  self.style = style
 
   return self
 end
@@ -118,23 +118,22 @@ function Text:_apply_right_alignment()
 end
 
 function Text:_build_style(text)
-  local props = self.style.props
-
-  if self.style.type == Style.Types.highlight then
+  local style = self.style
+  if style.type == Style.Types.highlight then
     local hl_pos = {
       row = self.row,
       col_start = self.col,
       col_end = self.col + string.len(self.text)
     }
-    return Style:new_hl(props.hl_name, hl_pos)
+    return Style:new_hl(style.hl_name, hl_pos)
   end
 
   local virtual_text_pos = {
-    pos_type = props.pos_type,
+    pos_type = style.pos_type,
     row = self.row,
     col = self.col,
   }
-  return Style:new_virtual_text(text, props.hl_name, virtual_text_pos)
+  return Style:new_virtual_text(text, style.hl_name, virtual_text_pos)
 end
 
 function Text:_build_entry()

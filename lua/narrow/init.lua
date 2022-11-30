@@ -12,9 +12,6 @@ function init_narrow()
   api.nvim_command("hi def link HUD Error")
   api.nvim_command("hi def link Query Todo")
 
-  api.nvim_set_hl(0, "FloatBorder", { link = "Function" })
-  api.nvim_set_hl(0, "NormalFloat", { link = "Normal" })
-
   vim.cmd([[
     augroup narrow
       au!
@@ -87,10 +84,10 @@ M.set_focus_input_window = function()
   narrow_editor:set_focus_input_window()
 end
 
-M.update_config = function(config)
+M.toggle_regex = function()
   if not narrow_editor then return end
 
-  narrow_editor:apply_config(config)
+  narrow_editor:get_store():dispatch({type = "toggle_regex" })
 end
 
 -- TODO these should be private

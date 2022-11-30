@@ -3,6 +3,7 @@ local Window = require("narrow.window")
 local Layout = require("narrow.gui.layout")
 local Canvas = require("narrow.gui.canvas")
 local SearchProvider = require("narrow.provider.search_provider")
+local Store = require("narrow.redua.store")
 
 local api = vim.api
 
@@ -29,6 +30,11 @@ function NarrowEditor:new(config)
     config = {},
     debounce_count = 0,
   }
+
+  new_obj.store = Store:new(function(state, action)
+    return new_obj:handle_action(state, action)
+  end)
+
   self.__index = self
   setmetatable(new_obj, self)
 
@@ -55,6 +61,14 @@ function NarrowEditor:drop()
   self.hud_window = nil
 
   self.layout = nil
+end
+
+function NarrowEditor:get_store()
+  return self.store
+end
+
+function NarrowEditor:get_provider()
+  return self.provider
 end
 
 -- creates the results and preview buffers/windows
@@ -89,6 +103,7 @@ function NarrowEditor:_build_layout(config)
       :set_buf_option("buftype", "prompt")
       :set_buf_option("swapfile", false)
       :set_border({ "╭", "─", "╮", "│", "╯", "─", "╰", "│" })
+      :set_window_highlights("Comment", "Comment")
 
   self.layout = Layout
       :new()
@@ -121,7 +136,7 @@ function NarrowEditor:_build_layout(config)
 
   api.nvim_set_current_win(self.input_window.win)
   api.nvim_win_set_buf(self.input_window.win, self.input_window.buf)
-  local prompt_text = " 👉 "
+  local prompt_text = "   "
   vim.fn.prompt_setprompt(self.input_window.buf, prompt_text)
   api.nvim_buf_add_highlight(self.input_window.buf, -1, "HUD", 0, 0, prompt_text:len())
 
@@ -177,7 +192,7 @@ function NarrowEditor:_set_keymaps(config)
     self.input_window.buf,
     "n",
     "<C-r>",
-    ':lua require("narrow").toggle_search_regex() <CR>',
+    ':lua require("narrow").toggle_regex() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
 end
@@ -192,10 +207,12 @@ function NarrowEditor:_init_provider(config)
     entry_header_namespace_id = self.entry_header_namespace_id,
     entry_result_namespace_id = self.entry_result_namespace_id,
 
-    config = config
+    config = config,
+    store = self.store
   }
 
-  self.current_provider = SearchProvider:new(editor_context)
+  self.provider = SearchProvider:new(editor_context)
+  self.store:dispatch({ type = "init_store" })
 end
 
 function NarrowEditor:get_config()
@@ -203,8 +220,6 @@ function NarrowEditor:get_config()
 end
 
 function NarrowEditor:apply_config(config)
-  narrow_utils.array.merge(self.config, config)
-
   -- -- apply any visual updates to the hud
   -- if self.hud_window then
   --   self:_render_hud()
@@ -215,15 +230,15 @@ function NarrowEditor:resize()
   if self.layout then
     self.layout:render()
   end
-  if self.current_provider then
-    self.current_provider:on_resized()
+  if self.provider then
+    self.provider:on_resized()
   end
 end
 
 function NarrowEditor:on_cursor_moved()
-  if not self.current_provider then return end
+  if not self.provider then return end
 
-  self.current_provider:on_cursor_moved()
+  self.provider:on_cursor_moved()
 end
 
 function NarrowEditor:on_selected()
@@ -232,9 +247,9 @@ function NarrowEditor:on_selected()
   local entry = self.results_window:get_entry_at_cursor(self.entry_result_namespace_id)
   if entry == nil then return false end
 
-  if not self.current_provider then return false end
+  if not self.provider then return false end
 
-  return self.current_provider:on_selected(entry, self.prev_win)
+  return self.provider:on_selected(entry, self.prev_win)
 end
 
 function NarrowEditor:set_focus_results_window()
@@ -273,7 +288,11 @@ function NarrowEditor:on_key(key)
     local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
     local _, e = string.find(query, prompt_text)
     query = query:sub(e + 1)
-    self.current_provider:on_query_updated(query)
+
+    self.store:dispatch({
+      type = "query_updated",
+      payload = query
+    })
   end, 5)
 end
 
@@ -317,6 +336,14 @@ function NarrowEditor:update_real_file()
   end
 
   print("narrow: Finished applying " .. #changes .. " changes")
+end
+
+function NarrowEditor:handle_action(state, action)
+  if self.provider then
+    return self.provider:handle_action(state, action)
+  end
+
+  return nil
 end
 
 return NarrowEditor
