@@ -67,12 +67,6 @@ function Window:set_win_option(option_name, option_value)
   return self
 end
 
-function Window:set_window_highlights(normal_float, float_border)
-  self.normal_float = normal_float
-  self.float_border = float_border
-  return self
-end
-
 function Window:get_config()
   return self.win_config
 end
@@ -95,13 +89,6 @@ function Window:render()
 
   self.buf = buffer
   self.win = window
-
-  if self.normal_float and self.float_border then
-    local window_ns = api.nvim_create_namespace("narrow-result-window")
-    api.nvim_set_hl(window_ns, "FloatBorder", { link = self.float_border })
-    api.nvim_set_hl(window_ns, "NormalFloat", { link = self.normal_float })
-    api.nvim_win_set_hl_ns(window, window_ns)
-  end
 
   return self
 end

@@ -52,7 +52,7 @@ end
 function SearchProvider:on_store_updated()
   local state = self.store:get_state()
 
-  self:search(state.query)
+  self:on_query_updated(state.query)
 end
 
 function SearchProvider:on_query_updated(query)

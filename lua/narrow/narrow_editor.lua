@@ -79,6 +79,7 @@ function NarrowEditor:_build_layout(config)
       :set_buf_option("buftype", "nofile")
       :set_buf_option("swapfile", false)
       :set_win_option("scrollbind", true)
+      :set_win_option("winhl", "NormalFloat:Normal,FloatBorder:Function")
       :set_border({ "", "", "", "", "", "─", "╰", "│" })
 
   local results_window = Window
@@ -88,6 +89,7 @@ function NarrowEditor:_build_layout(config)
       :set_buf_option("swapfile", false)
       :set_win_option("scrollbind", true)
       :set_win_option("wrap", false)
+      :set_win_option("winhl", "NormalFloat:Normal,FloatBorder:Function")
       :set_border({ "", "", "", "│", "╯", "─", "", "" })
 
   local hud_window = Window
@@ -95,6 +97,7 @@ function NarrowEditor:_build_layout(config)
       :set_buf_option("bufhidden", "wipe")
       :set_buf_option("buftype", "nofile")
       :set_buf_option("swapfile", false)
+      :set_win_option("winhl", "NormalFloat:Normal,FloatBorder:Function")
       :set_border({ "╭", "─", "╮", "│", "", "", "╰", "│" })
 
   local input_window = Window
@@ -102,8 +105,8 @@ function NarrowEditor:_build_layout(config)
       :set_buf_option("bufhidden", "wipe")
       :set_buf_option("buftype", "prompt")
       :set_buf_option("swapfile", false)
+      :set_win_option("winhl", "NormalFloat:Normal,FloatBorder:Comment")
       :set_border({ "╭", "─", "╮", "│", "╯", "─", "╰", "│" })
-      :set_window_highlights("Comment", "Comment")
 
   self.layout = Layout
       :new()
