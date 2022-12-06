@@ -21,7 +21,13 @@ end
 
 -- Places text at the col, row byte offsets.
 -- Pads leading bytes if needed with a space
-function Canvas:add_text(text, col, row)
+-- We have display width and byte-width to contend with
+--
+-- 1. Simple case -> completely new line
+-- 2. Display width < then the desired col
+--      * add leading spaces to col - 1
+-- 3.
+function Canvas:add_text(text, col, row, as_bytes)
   if row < 0 or col < 0 then
     return
   end
@@ -29,21 +35,47 @@ function Canvas:add_text(text, col, row)
   self.row_max = math.max(row, self.row_max)
 
   if self.lines[row] == nil then
-    self.lines[row] = string.rep(" ", col - 1) .. text
+    self.lines[row] = string.rep("-", col - 1) .. text
+  elseif not as_bytes then
+    local line = self.lines[row]
+    local line_start = vim.fn.strcharpart(line, 0, col)
+    local line_end = vim.fn.strcharpart(line, col)
+    local display_width_start = vim.fn.strdisplaywidth(line_start)
+
+    -- easy case
+    if vim.fn.strdisplaywidth(line) < col then
+      line = line .. string.rep("*", col - vim.fn.strdisplaywidth(line) - 1) .. text
+    elseif display_width_start > col then
+      -- remove characters from col (could be multi width and need to backfill)
+      print("ldw: " .. display_width_start)
+      while vim.fn.strdisplaywidth(line_start) >= col do
+        line_start = vim.fn.strcharpart(line_start, 0, vim.fn.strchars(line_start) - 1)
+      end
+      print("new_width: " .. vim.fn.strdisplaywidth(line_start))
+      -- line = line_start .. line_end
+    end
+
+
+    -- if vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) < col then
+    --   line = line .. string.rep("*", col - vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) - 1)
+    -- end
+
+    -- line = vim.fn.strcharpart(line, 0, col) .. text .. vim.fn.strcharpart(line, col + vim.fn.strchars(text) + 1)
+
+    self.lines[row] = line
   else
     local line = self.lines[row]
-    local line_len = string.len(line)
+    local line_len = #line
 
-    -- if existing line length is less than the desired column, 
-    -- inject padding to start of column
     if line_len < col then
       line = line .. string.rep(" ", col - line_len - 1) .. text
     else
-      line = line:sub(0, col) .. text .. line:sub(col + string.len(text) + 1)
+      line = line:sub(0, col) .. text .. line:sub(col + #text + 1)
     end
 
     self.lines[row] = line
   end
+
 end
 
 function Canvas:add_style(style)
@@ -73,6 +105,10 @@ function Canvas:render(only_styles)
   for _, style in ipairs(self.styles) do
     if style.type == Style.Types.highlight then
       -- make highlight call to window
+      -- convert display col to byte col for vim hl api
+      local byte_diff = style.pos.col_end - style.pos.col_start
+      style.pos.col_start = #vim.fn.strcharpart(self.lines[style.pos.row], 0, style.pos.col_start)
+      style.pos.col_end = style.pos.col_start + byte_diff
       self.window:add_highlight(style.name, style.pos)
     elseif style.type == Style.Types.virtual_text then
       self.window:add_virtual_text(style.text, style.name, style.pos)

@@ -49,9 +49,9 @@ end
 function Button:render(canvas)
   if self.text then
     -- adjust width if not wide enough
-    if self.width < string.len(self.text.text) then
-      local padding = 4
-      self.width = string.len(self.text.text) + padding
+    if self.width < vim.fn.strdisplaywidth(self.text.text) then
+      local padding = vim.fn.strdisplaywidth(self.text.text) * 2
+      self.width = vim.fn.strdisplaywidth(self.text.text) + padding
     end
   end
 
@@ -71,7 +71,7 @@ function Button:render(canvas)
       :render(canvas)
 
   for row = 1, self.height do
-    local middle = "│" .. string.rep(" ", self.width - 2) .. "│"
+    local middle = "│" .. string.rep("+", self.width - 2) .. "│"
     Text:new()
         :set_text(middle)
         :set_pos(self.col, self.row + row)
@@ -82,9 +82,10 @@ function Button:render(canvas)
   -- render button text
   if self.text then
     self.text
-        :set_pos(self.col + 2, self.row + 1)
-        :set_dimensions(self.width - 2, 1)
-        :set_alignment(Text.AlignmentType.center)
+        :set_pos(self.col, self.row + 1)
+        --:set_dimensions(self.width - 4, 1)
+        --:set_alignment(Text.AlignmentType.center)
+        :apply_style(self.style)
         :render(canvas)
   end
 end

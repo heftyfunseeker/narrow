@@ -56,7 +56,7 @@ function Layout:render()
   -- input window
   local input_pos_y = hud_y + 1
   local input_pos_x = 2
-  local input_width = math.max(math.floor(0.35 * columns), 1)
+  local input_width = 10 -- math.max(math.floor(0.35 * columns), 1)
   local input_height = 1
 
   self.input_window

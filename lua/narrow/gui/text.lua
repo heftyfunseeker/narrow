@@ -29,7 +29,7 @@ function Text:set_text(text)
 end
 
 function Text:apply_style(style)
-  self.style = style
+  --self.style = style
 
   return self
 end
@@ -40,9 +40,12 @@ function Text:set_alignment(alignment_type)
   return self
 end
 
-function Text:set_pos(col, row)
+-- set the display col, row. Optionally, treat these values
+-- as bytes with `as_bytes` which will index directly with col/row.
+function Text:set_pos(col, row, as_bytes)
   self.col = col
   self.row = row
+  self.as_bytes = as_bytes
 
   return self
 end
@@ -75,10 +78,10 @@ function Text:render(canvas)
   end
 
   if is_virtual_text == false then
-    canvas:add_text(text, self.col, self.row)
+    canvas:add_text(text, self.col, self.row, self.as_bytes)
   else
     -- we need to ensure there's a row for the virtual text to write to
-    canvas:add_text("", 0, self.row)
+    canvas:add_text("", 0, self.row, self.as_bytes)
   end
 
   if self.entry_id ~= nil then
@@ -96,7 +99,7 @@ function Text:_apply_aligment()
 end
 
 function Text:_apply_center_alignment()
-  local text_len = string.len(self.text)
+  local text_len = vim.fn.strdisplaywidth(self.text)
   if self.width < text_len then
     return self.text
   end
@@ -107,7 +110,7 @@ function Text:_apply_center_alignment()
 end
 
 function Text:_apply_right_alignment()
-  local text_len = string.len(self.text)
+  local text_len = vim.fn.strdisplaywidth(self.text)
   if self.width < text_len then
     return self.text
   end
@@ -123,7 +126,7 @@ function Text:_build_style(text)
     local hl_pos = {
       row = self.row,
       col_start = self.col,
-      col_end = self.col + string.len(self.text)
+      col_end = self.col + #self.text
     }
     return Style:new_hl(style.hl_name, hl_pos)
   end

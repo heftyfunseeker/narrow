@@ -11,24 +11,23 @@ SearchProvider.__index = SearchProvider
 
 -- ProviderInterface
 function SearchProvider:new(editor_context)
-  local new_obj = Utils.array.shallow_copy(editor_context)
+  local this = Utils.array.shallow_copy(editor_context)
 
-  new_obj.results = nil
-  new_obj.entry_to_result = nil
+  this.entry_to_result = nil
+  this.ripgrep_parser = RipgrepParser:new()
 
-  new_obj.ripgrep_parser = RipgrepParser:new()
-
-  new_obj.store:subscribe(function()
-    new_obj:on_store_updated()
+  this.store:subscribe(function()
+    this:on_store_updated()
   end)
 
-  return setmetatable(new_obj, self)
+  return setmetatable(this, self)
 end
 
 function SearchProvider:handle_action(state, action)
   local action_map = {
     init_store = function(_)
       return {
+        rg_messages = nil,
         enable_regex = false -- @todo: come from config
       }
     end,
@@ -43,7 +42,13 @@ function SearchProvider:handle_action(state, action)
       local new_state = Utils.array.shallow_copy(state)
       new_state.query = query
       return new_state
-    end
+    end,
+
+    rg_messages_parsed = function(rg_messages)
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.rg_messages = rg_messages
+      return new_state
+    end,
   }
 
   return action_map[action.type](action.payload)
@@ -52,10 +57,18 @@ end
 function SearchProvider:on_store_updated()
   local state = self.store:get_state()
 
-  self:on_query_updated(state.query)
+  local results_updated = self.prev_rg_messages ~= state.rg_messages
+  if results_updated then
+    self.prev_rg_messages = state.rg_messages
+    self:render_rg_messages()
+  else
+    self:on_query_updated()
+  end
 end
 
-function SearchProvider:on_query_updated(query)
+function SearchProvider:on_query_updated()
+  local query = self.store:get_state().query
+
   if query ~= nil and #query >= 2 then
     self:search(query)
   else
@@ -106,7 +119,7 @@ end
 
 function SearchProvider:search(query_term)
   -- clear previous results out
-  self.results = {}
+  local rg_messages = {}
   self.ripgrep_parser:reset()
 
   if Stdout ~= nil then
@@ -132,8 +145,7 @@ function SearchProvider:search(query_term)
       Handle:close()
       Handle = nil
 
-      self:render_rg_messages()
-      self.prev_query_term = query_term
+      self.store:dispatch({ type = "rg_messages_parsed", payload = rg_messages })
     end)
   )
 
@@ -143,7 +155,7 @@ function SearchProvider:search(query_term)
     end
 
     if input_stream then
-      self.ripgrep_parser:parse_stream(input_stream, self.results)
+      self.ripgrep_parser:parse_stream(input_stream, rg_messages)
     end
   end)
 
@@ -154,13 +166,14 @@ function SearchProvider:render_rg_messages()
   self.results_canvas:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
   self.header_canvas:clear({ self.entry_header_namespace_id, self.entry_result_namespace_id })
 
+  local rg_messages = self.store:get_state().rg_messages
   self.entry_to_result = {}
 
   local row = 0
   local entry_result_index = 1
   local entry_header_index = 1
 
-  for _, rg_message in ipairs(self.results) do
+  for _, rg_message in ipairs(rg_messages) do
     if rg_message.type == "begin" then
       local path = rg_message.data.path.text
       if path == nil then
@@ -199,7 +212,7 @@ function SearchProvider:render_rg_messages()
       for _, match in ipairs(submatches) do
         Text:new()
             :set_text(match.match.text)
-            :set_pos(match.start, row)
+            :set_pos(match.start, row, true)
             :apply_style({ type = Style.Types.highlight, hl_name = "NarrowMatch" })
             :mark_entry(entry_result_index, self.entry_result_namespace_id)-- mark this as a selectable entry
             :render(self.results_canvas)
@@ -262,11 +275,32 @@ function SearchProvider:render_hud()
     style = { type = Style.Types.highlight, hl_name = "Comment" }
   end
 
+  -- Button
+  --     :new()
+  --     :set_pos(input_width + 4, 0)
+  --     :apply_style(style)
+  --     :set_text(Text:new():set_text("regex"))
+  --     :render(self.hud_canvas)
+
   Button
       :new()
-      :set_pos(input_width + 4, 0)
+      :set_pos(input_width + 10, 0)
       :apply_style(style)
-      :set_text(Text:new():set_text("regex"))
+      :set_text(Text:new():set_text("👉"))
+      :render(self.hud_canvas)
+
+  Button
+      :new()
+      :set_pos(input_width + 20, 0)
+      :apply_style(style)
+      :set_text(Text:new():set_text("👉"))
+      :render(self.hud_canvas)
+  --
+  Button
+      :new()
+      :set_pos(input_width + 30, 0)
+      :apply_style(style)
+      :set_text(Text:new():set_text("👉"))
       :render(self.hud_canvas)
 
   self.hud_canvas:render()
@@ -274,3 +308,10 @@ function SearchProvider:render_hud()
 end
 
 return SearchProvider
+
+-------------------╭────╮*****╭────╮****╭────╮
+-------------------│👉++│*****│👉++│****│+👉+│
+-------------------╰────╯*****╰────╯****╰────╯
+
+
+
