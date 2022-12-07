@@ -82,7 +82,7 @@ function Button:render(canvas)
   -- render button text
   if self.text then
     self.text
-        :set_pos(self.col, self.row + 1)
+        :set_pos(self.col + 1, self.row + 1)
         --:set_dimensions(self.width - 4, 1)
         --:set_alignment(Text.AlignmentType.center)
         :apply_style(self.style)

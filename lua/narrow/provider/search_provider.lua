@@ -281,19 +281,15 @@ function SearchProvider:render_hud()
   --     :apply_style(style)
   --     :set_text(Text:new():set_text("regex"))
   --     :render(self.hud_canvas)
+
   Text:new()
     :set_text("👉")
     :set_pos(input_width + 9, 0)
     :render(self.hud_canvas)
 
-  Text:new()
-    :set_text("👉")
-    :set_pos(input_width + 20, 0)
-    :render(self.hud_canvas)
-
   Button
       :new()
-      :set_pos(input_width + 20, 0)
+      :set_pos(input_width + 10, 0)
       :apply_style(style)
       :set_text(Text:new():set_text("regex"))
       :render(self.hud_canvas)

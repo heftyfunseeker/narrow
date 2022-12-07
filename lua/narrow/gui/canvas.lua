@@ -19,14 +19,9 @@ function Canvas:new(window)
   return setmetatable(new_obj, self)
 end
 
--- Places text at the col, row byte offsets.
+-- Places text at the col, row screen display coords.
 -- Pads leading bytes if needed with a space
 -- We have display width and byte-width to contend with
---
--- 1. Simple case -> completely new line
--- 2. Display width < then the desired col
---      * add leading spaces to col - 1
--- 3.
 function Canvas:add_text(text, col, row, as_bytes)
   if row < 0 or col < 0 then
     return
@@ -35,23 +30,23 @@ function Canvas:add_text(text, col, row, as_bytes)
   self.row_max = math.max(row, self.row_max)
 
   if self.lines[row] == nil then
-    self.lines[row] = string.rep(" ", col - 1) .. text
+    self.lines[row] = string.rep("-", col - 1) .. text
   elseif not as_bytes then
     local line = self.lines[row]
     -- easy case
-    if vim.fn.strdisplaywidth(line) <= col then
-      line = line .. string.rep(" ", col - vim.fn.strdisplaywidth(line) - 1) .. text
-     -- Muti-width display characters case
-    elseif vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) > col then 
+    if vim.fn.strdisplaywidth(line) < col then
+      line = line .. string.rep("*", col - vim.fn.strdisplaywidth(line) - 1) .. text
+      -- muti-width display characters case
+    elseif vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) >= col then
       -- remove characters from col (could be multi width and need to backfill)
       local line_start = vim.fn.strcharpart(line, 0, col)
-      while vim.fn.strdisplaywidth(line_start) > col do
+      while vim.fn.strdisplaywidth(line_start) >= col do
         line_start = vim.fn.strcharpart(line_start, 0, vim.fn.strchars(line_start) - 1)
       end
       local line_end = vim.fn.strcharpart(line, vim.fn.strchars(line_start) + vim.fn.strdisplaywidth(text))
-      line = line_start .. text .. line_end
-    -- standard display width characters case
-    else 
+      line = line_start .. string.rep("+", col - vim.fn.strdisplaywidth(line_start) - 1) .. text .. line_end
+      -- standard display width characters case
+    else
       line = vim.fn.strcharpart(line, 0, col) .. text .. vim.fn.strcharpart(line, col + vim.fn.strdisplaywidth(text))
     end
 
