@@ -29,7 +29,7 @@ function Text:set_text(text)
 end
 
 function Text:apply_style(style)
-  --self.style = style
+  self.style = style
 
   return self
 end

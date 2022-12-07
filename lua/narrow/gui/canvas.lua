@@ -30,23 +30,21 @@ function Canvas:add_text(text, col, row, as_bytes)
   self.row_max = math.max(row, self.row_max)
 
   if self.lines[row] == nil then
-    self.lines[row] = string.rep("-", col - 1) .. text
+    self.lines[row] = string.rep(" ", col - 1) .. text
   elseif not as_bytes then
     local line = self.lines[row]
-    -- easy case
-    if vim.fn.strdisplaywidth(line) < col then
-      line = line .. string.rep("*", col - vim.fn.strdisplaywidth(line) - 1) .. text
-      -- muti-width display characters case
-    elseif vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) >= col then
-      -- remove characters from col (could be multi width and need to backfill)
+
+    if vim.fn.strdisplaywidth(line) < col then -- easy case
+      line = line .. string.rep(" ", col - vim.fn.strdisplaywidth(line) - 1) .. text
+    elseif vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) >= col then -- muti-width display characters case
       local line_start = vim.fn.strcharpart(line, 0, col)
-      while vim.fn.strdisplaywidth(line_start) >= col do
+      while vim.fn.strdisplaywidth(line_start) >= col and (vim.fn.strchars(line_start) - 1) > 0 do
         line_start = vim.fn.strcharpart(line_start, 0, vim.fn.strchars(line_start) - 1)
       end
+
       local line_end = vim.fn.strcharpart(line, vim.fn.strchars(line_start) + vim.fn.strdisplaywidth(text))
-      line = line_start .. string.rep("+", col - vim.fn.strdisplaywidth(line_start) - 1) .. text .. line_end
-      -- standard display width characters case
-    else
+      line = line_start .. string.rep(" ", col - vim.fn.strdisplaywidth(line_start) - 1) .. text .. line_end
+    else -- standard display width characters case
       line = vim.fn.strcharpart(line, 0, col) .. text .. vim.fn.strcharpart(line, col + vim.fn.strdisplaywidth(text))
     end
 
@@ -92,11 +90,6 @@ function Canvas:render(only_styles)
   -- apply styles
   for _, style in ipairs(self.styles) do
     if style.type == Style.Types.highlight then
-      -- make highlight call to window
-      -- convert display col to byte col for vim hl api
-      local byte_diff = style.pos.col_end - style.pos.col_start
-      style.pos.col_start = #vim.fn.strcharpart(self.lines[style.pos.row], 0, style.pos.col_start)
-      style.pos.col_end = style.pos.col_start + byte_diff
       self.window:add_highlight(style.name, style.pos)
     elseif style.type == Style.Types.virtual_text then
       self.window:add_virtual_text(style.text, style.name, style.pos)
