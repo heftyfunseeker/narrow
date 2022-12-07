@@ -35,32 +35,25 @@ function Canvas:add_text(text, col, row, as_bytes)
   self.row_max = math.max(row, self.row_max)
 
   if self.lines[row] == nil then
-    self.lines[row] = string.rep("-", col - 1) .. text
+    self.lines[row] = string.rep(" ", col - 1) .. text
   elseif not as_bytes then
     local line = self.lines[row]
-    local line_start = vim.fn.strcharpart(line, 0, col)
-    local line_end = vim.fn.strcharpart(line, col)
-    local display_width_start = vim.fn.strdisplaywidth(line_start)
-
     -- easy case
-    if vim.fn.strdisplaywidth(line) < col then
-      line = line .. string.rep("*", col - vim.fn.strdisplaywidth(line) - 1) .. text
-    elseif display_width_start > col then
+    if vim.fn.strdisplaywidth(line) <= col then
+      line = line .. string.rep(" ", col - vim.fn.strdisplaywidth(line) - 1) .. text
+     -- Muti-width display characters case
+    elseif vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) > col then 
       -- remove characters from col (could be multi width and need to backfill)
-      print("ldw: " .. display_width_start)
-      while vim.fn.strdisplaywidth(line_start) >= col do
+      local line_start = vim.fn.strcharpart(line, 0, col)
+      while vim.fn.strdisplaywidth(line_start) > col do
         line_start = vim.fn.strcharpart(line_start, 0, vim.fn.strchars(line_start) - 1)
       end
-      print("new_width: " .. vim.fn.strdisplaywidth(line_start))
-      -- line = line_start .. line_end
+      local line_end = vim.fn.strcharpart(line, vim.fn.strchars(line_start) + vim.fn.strdisplaywidth(text))
+      line = line_start .. text .. line_end
+    -- standard display width characters case
+    else 
+      line = vim.fn.strcharpart(line, 0, col) .. text .. vim.fn.strcharpart(line, col + vim.fn.strdisplaywidth(text))
     end
-
-
-    -- if vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) < col then
-    --   line = line .. string.rep("*", col - vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) - 1)
-    -- end
-
-    -- line = vim.fn.strcharpart(line, 0, col) .. text .. vim.fn.strcharpart(line, col + vim.fn.strchars(text) + 1)
 
     self.lines[row] = line
   else

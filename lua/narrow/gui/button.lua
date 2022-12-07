@@ -50,7 +50,7 @@ function Button:render(canvas)
   if self.text then
     -- adjust width if not wide enough
     if self.width < vim.fn.strdisplaywidth(self.text.text) then
-      local padding = vim.fn.strdisplaywidth(self.text.text) * 2
+      local padding = 2
       self.width = vim.fn.strdisplaywidth(self.text.text) + padding
     end
   end
