@@ -192,8 +192,8 @@ function SearchProvider:render_rg_messages()
           :render(self.results_canvas)
 
       Text:new()
-          :set_text(" " .. path)
-          :set_pos(1, row)
+          :set_text(path)
+          :set_pos(vim.fn.strdisplaywidth(icon) + 1, row)
           :apply_style({ type = Style.Types.virtual_text, hl_name = "NarrowHeader", pos_type = "overlay" })
           :mark_entry(entry_header_index, self.entry_header_namespace_id)
           :render(self.results_canvas)
@@ -275,18 +275,19 @@ function SearchProvider:render_hud()
     style = { type = Style.Types.highlight, hl_name = "Comment" }
   end
 
-  Button
-      :new()
-      :set_pos(input_width + 4, 0)
-      :apply_style(style)
-      :set_text(Text:new():set_text("regex"))
-      :render(self.hud_canvas)
+  -- Button
+  --     :new()
+  --     :set_pos(input_width + 4, 0)
+  --     :apply_style(style)
+  --     :set_text(Text:new():set_text("regex"))
+  --     :render(self.hud_canvas)
+
 
   Button
       :new()
       :set_pos(input_width + 30, 0)
       :apply_style(style)
-      :set_text(Text:new():set_text(" 😀 "))
+      :set_text(Text:new():set_text(" Z "))
       :render(self.hud_canvas)
 
   Button
@@ -295,6 +296,21 @@ function SearchProvider:render_hud()
       :apply_style(style)
       :set_text(Text:new():set_text(" 😀 "))
       :render(self.hud_canvas)
+
+  Text:new()
+    :set_text("regex")
+    :set_pos(input_width + 4, 0)
+    :render(self.hud_canvas)
+
+  Text:new()
+    :set_text("regex")
+    :set_pos(input_width + 10, 0)
+    :render(self.hud_canvas)
+
+  Text:new()
+    :set_text("blahz")
+    :set_pos(input_width + 10, 0)
+    :render(self.hud_canvas)
 
   self.hud_canvas:render()
   self.input_canvas:render(true)

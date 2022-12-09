@@ -73,8 +73,8 @@ function Button:render(canvas)
 
   if self.text then
     self.text
-      :set_pos(self.col + 1, self.row + 1)
-      :render(canvas)
+        :set_pos(self.col + 1, self.row + 1)
+        :render(canvas)
   end
 
   local text_len = 0
