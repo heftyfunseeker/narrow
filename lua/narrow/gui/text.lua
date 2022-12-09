@@ -78,10 +78,10 @@ function Text:render(canvas)
   end
 
   if is_virtual_text == false then
-    canvas:add_text(text, self.col, self.row, self.as_bytes)
+    canvas:add_text({ text = text, col = self.col, row = self.row, as_bytes = self.as_bytes })
   else
     -- we need to ensure there's a row for the virtual text to write to
-    canvas:add_text("", 0, self.row, self.as_bytes)
+    canvas:add_text({ text = "", col = 0, row = self.row, as_bytes = self.as_bytes })
   end
 
   if self.entry_id ~= nil then

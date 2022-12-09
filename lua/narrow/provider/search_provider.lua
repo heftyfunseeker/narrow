@@ -275,13 +275,19 @@ function SearchProvider:render_hud()
     style = { type = Style.Types.highlight, hl_name = "Comment" }
   end
 
-  -- Button
-  --     :new()
-  --     :set_pos(input_width + 4, 0)
-  --     :apply_style(style)
-  --     :set_text(Text:new():set_text("regex"))
-  --     :render(self.hud_canvas)
+  Button
+      :new()
+      :set_pos(input_width + 4, 0)
+      :apply_style(style)
+      :set_text(Text:new():set_text("regex"))
+      :render(self.hud_canvas)
 
+  Button
+      :new()
+      :set_pos(input_width + 20, 0)
+      :apply_style(style)
+      :set_text(Text:new():set_text("regex"))
+      :render(self.hud_canvas)
 
   self.hud_canvas:render()
   self.input_canvas:render(true)

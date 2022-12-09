@@ -22,7 +22,14 @@ end
 -- Places text at the col, row screen display coords.
 -- Pads leading bytes if needed with a space
 -- We have display width and byte-width to contend with
-function Canvas:add_text(text, col, row, as_bytes)
+-- params : { text, col, row, as_bytes, style }
+function Canvas:add_text(params)
+  local text = params.text
+  local col = params.col
+  local row = params.row
+  local as_bytes = params.as_bytes
+  local style = params.style
+
   if row < 0 or col < 0 then
     return
   end
