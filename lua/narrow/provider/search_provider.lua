@@ -284,9 +284,16 @@ function SearchProvider:render_hud()
 
   Button
       :new()
+      :set_pos(input_width + 30, 0)
+      :apply_style(style)
+      :set_text(Text:new():set_text(" 😀 "))
+      :render(self.hud_canvas)
+
+  Button
+      :new()
       :set_pos(input_width + 20, 0)
       :apply_style(style)
-      :set_text(Text:new():set_text("regex"))
+      :set_text(Text:new():set_text(" 😀 "))
       :render(self.hud_canvas)
 
   self.hud_canvas:render()

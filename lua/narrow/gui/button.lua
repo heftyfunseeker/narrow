@@ -58,6 +58,7 @@ function Button:render(canvas)
   -- render border
   local top = "╭" .. string.rep("─", self.width - 2) .. "╮"
   local bottom = "╰" .. string.rep("─", self.width - 2) .. "╯"
+
   Text:new()
       :set_text(top)
       :set_pos(self.col, self.row)
@@ -65,29 +66,35 @@ function Button:render(canvas)
       :render(canvas)
 
   Text:new()
-      :set_text(bottom)
-      :set_pos(self.col, self.row + self.height + 1)
+      :set_text("│")
+      :set_pos(self.col, self.row + 1)
       :apply_style(self.style)
       :render(canvas)
 
-  for row = 1, self.height do
-    local middle = "│" .. string.rep("+", self.width - 2) .. "│"
-    Text:new()
-        :set_text(middle)
-        :set_pos(self.col, self.row + row)
-        :apply_style(self.style)
-        :render(canvas)
-  end
-
-  -- render button text
   if self.text then
     self.text
-        :set_pos(self.col + 1, self.row + 1)
-        --:set_dimensions(self.width - 4, 1)
-        --:set_alignment(Text.AlignmentType.center)
-        :apply_style(self.style)
-        :render(canvas)
+      :set_pos(self.col + 1, self.row + 1)
+      :render(canvas)
   end
+
+  local text_len = 0
+  if self.text and self.text.text then
+    text_len = vim.fn.strdisplaywidth(self.text.text)
+  end
+
+  Text:new()
+      :set_text("│")
+      :set_pos(self.col + text_len + 1, self.row + 1)
+      :apply_style(self.style)
+      :render(canvas)
+
+  Text:new()
+      :set_text(bottom)
+      :set_pos(self.col, self.row + 2)
+      :apply_style(self.style)
+      :render(canvas)
+
+  -- render button text
 end
 
 return Button

@@ -123,11 +123,13 @@ function Window:get_buffer_lines(start_line, end_line)
   return api.nvim_buf_get_lines(self.buf, start_line, end_line, true)
 end
 
+-- pos: { row, col_start, col_end }
 function Window:add_highlight(hl_name, pos)
   -- @todo: namespaces
   api.nvim_buf_add_highlight(self.buf, -1, hl_name, pos.row, pos.col_start, pos.col_end)
 end
 
+-- pos: { pos_type, col }
 function Window:add_virtual_text(text, hl_name, pos)
   local opts = {
     virt_text = { { text, hl_name } },

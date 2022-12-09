@@ -23,6 +23,7 @@ end
 -- Pads leading bytes if needed with a space
 -- We have display width and byte-width to contend with
 -- params : { text, col, row, as_bytes, style }
+-- @TODO: we need to handle this same madness for VirtualText
 function Canvas:add_text(params)
   local text = params.text
   local col = params.col
@@ -34,15 +35,27 @@ function Canvas:add_text(params)
     return
   end
 
+
+  local hl_col_byte_start = 0 -- used for hl placement
+
   self.row_max = math.max(row, self.row_max)
+
+  -- Early return if we're rendering virtual text - this method needs love
+  if style and style.type == Style.Types.virtual_text then
+    table.insert(self.styles, self:_build_style(text, row, col, style))
+    return
+  end
 
   if self.lines[row] == nil then
     self.lines[row] = string.rep(" ", col - 1) .. text
+    hl_col_byte_start = col - 1
   elseif not as_bytes then
     local line = self.lines[row]
 
     if vim.fn.strdisplaywidth(line) < col then -- easy case
-      line = line .. string.rep(" ", col - vim.fn.strdisplaywidth(line) - 1) .. text
+      line = line .. string.rep(" ", col - vim.fn.strdisplaywidth(line) - 1)
+      hl_col_byte_start = #line
+      line = line .. text
     elseif vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, col)) >= col then -- muti-width display characters case
       local line_start = vim.fn.strcharpart(line, 0, col)
       while vim.fn.strdisplaywidth(line_start) >= col and (vim.fn.strchars(line_start) - 1) > 0 do
@@ -50,15 +63,20 @@ function Canvas:add_text(params)
       end
 
       local line_end = vim.fn.strcharpart(line, vim.fn.strchars(line_start) + vim.fn.strdisplaywidth(text))
-      line = line_start .. string.rep(" ", col - vim.fn.strdisplaywidth(line_start) - 1) .. text .. line_end
+      line = line_start .. string.rep(" ", col - vim.fn.strdisplaywidth(line_start) - 1)
+      hl_col_byte_start = #line
+      line =  line .. text .. line_end
     else -- standard display width characters case
-      line = vim.fn.strcharpart(line, 0, col) .. text .. vim.fn.strcharpart(line, col + vim.fn.strdisplaywidth(text))
+      line = vim.fn.strcharpart(line, 0, col)
+      hl_col_byte_start = #line
+      line = line .. text .. vim.fn.strcharpart(line, col + vim.fn.strdisplaywidth(text))
     end
 
     self.lines[row] = line
   else
     local line = self.lines[row]
     local line_len = #line
+    hl_col_byte_start = col
 
     if line_len < col then
       line = line .. string.rep(" ", col - line_len - 1) .. text
@@ -69,10 +87,29 @@ function Canvas:add_text(params)
     self.lines[row] = line
   end
 
+  -- add highlights
+  if style then
+    table.insert(self.styles, self:_build_style(text, row, hl_col_byte_start, style))
+  end
+
 end
 
-function Canvas:add_style(style)
-  table.insert(self.styles, style)
+function Canvas:_build_style(text, row, col, style)
+  if style.type == Style.Types.highlight then
+    local hl_pos = {
+      row = row,
+      col_start = col,
+      col_end = col + #text
+    }
+    return Style:new_hl(style.hl_name, hl_pos)
+  end
+
+  local virtual_text_pos = {
+    pos_type = style.pos_type,
+    row = row,
+    col = col,
+  }
+  return Style:new_virtual_text(text, style.hl_name, virtual_text_pos)
 end
 
 function Canvas:add_entry(entry)

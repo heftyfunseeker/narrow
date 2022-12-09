@@ -65,25 +65,14 @@ function Text:mark_entry(entry_id, entry_namespace)
 end
 
 function Text:render(canvas)
-  local is_virtual_text = false
-
   local text = self.text
   if self.alignment_type ~= nil then
     text = self:_apply_aligment()
   end
 
-  if self.style ~= nil then
-    is_virtual_text = self.style.type == Style.Types.virtual_text
-    canvas:add_style(self:_build_style(text))
-  end
+  canvas:add_text({ text = text, col = self.col, row = self.row, as_bytes = self.as_bytes, style = self.style })
 
-  if is_virtual_text == false then
-    canvas:add_text({ text = text, col = self.col, row = self.row, as_bytes = self.as_bytes })
-  else
-    -- we need to ensure there's a row for the virtual text to write to
-    canvas:add_text({ text = "", col = 0, row = self.row, as_bytes = self.as_bytes })
-  end
-
+  -- we need to ensure there's a row for the virtual text to write to
   if self.entry_id ~= nil then
     canvas:add_entry(self:_build_entry())
   end
@@ -118,25 +107,6 @@ function Text:_apply_right_alignment()
   local padding = math.floor(self.width - text_len)
   local padding_text = string.rep(" ", padding)
   return padding_text .. self.text
-end
-
-function Text:_build_style(text)
-  local style = self.style
-  if style.type == Style.Types.highlight then
-    local hl_pos = {
-      row = self.row,
-      col_start = self.col,
-      col_end = self.col + #self.text
-    }
-    return Style:new_hl(style.hl_name, hl_pos)
-  end
-
-  local virtual_text_pos = {
-    pos_type = style.pos_type,
-    row = self.row,
-    col = self.col,
-  }
-  return Style:new_virtual_text(text, style.hl_name, virtual_text_pos)
 end
 
 function Text:_build_entry()
