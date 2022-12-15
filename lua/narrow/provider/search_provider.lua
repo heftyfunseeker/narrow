@@ -1,7 +1,5 @@
 local Utils = require("narrow.narrow_utils")
 local Devicons = require("nvim-web-devicons")
-local Text = require("narrow.gui.text")
-local Button = require("narrow.gui.button")
 local RipgrepParser = require("narrow.provider.ripgrep_parser")
 
 local api = vim.api
@@ -78,21 +76,9 @@ function SearchProvider:on_query_updated()
   end
 end
 
-function SearchProvider:on_selected(entry, prev_win)
-  local rg_match = self.entry_to_result[entry[1]]
-  if rg_match == nil then return false end
-
-  local submatches = rg_match.data.submatches
-  if submatches then
-    api.nvim_set_current_win(prev_win)
-    api.nvim_command("edit " .. rg_match.data.path.text)
-    for _, match in ipairs(submatches) do
-      api.nvim_win_set_cursor(0, { rg_match.data.line_number, match.start })
-      return true
-    end
-  end
-
-  return false
+function SearchProvider:on_selected()
+  self.results_canvas:select_at_cursor()
+  return true
 end
 
 function SearchProvider:on_cursor_moved()
@@ -185,48 +171,64 @@ function SearchProvider:render_rg_messages()
         Utils.get_file_extension(path),
         { default = true }
       )
-      Text:new()
-          :set_text(icon)
-          :set_pos(0, row)
-          :apply_style({ type = Style.Types.virtual_text, hl_name = hl_name, pos_type = "overlay" })
-          :render(self.results_canvas)
 
-      Text:new()
-          :set_text(path)
-          :set_pos(vim.fn.strdisplaywidth(icon) + 1, row)
-          :apply_style({ type = Style.Types.virtual_text, hl_name = "NarrowHeader", pos_type = "overlay" })
-          :mark_entry(entry_header_index, self.entry_header_namespace_id)
-          :render(self.results_canvas)
+      local header = Style.join.horizontal({
+        Style
+            :new()
+            :margin_right(1)
+            :add_highlight(hl_name)
+            :render(icon),
+        Style
+            :new()
+            :add_highlight("Function")
+            :render(path)
+      })
+      self.results_canvas:write(header)
 
       row = row + 1
       entry_header_index = entry_header_index + 1
     elseif rg_message.type == "match" then
-      local line = rg_message.data.lines.text
-      Text:new()
-          :set_text(line:sub(0, -2))
-          :set_pos(0, row)
-          :render(self.results_canvas)
-
+      local result_text = rg_message.data.lines.text:sub(0, -2)
 
       local submatches = rg_message.data.submatches
+
+      local next_match_offset = 0
+      local style_frags = {}
+
+      -- Split the result string into fragments to build a styled line.
       for _, match in ipairs(submatches) do
-        Text:new()
-            :set_text(match.match.text)
-            :set_pos(match.start, row, true)
-            :apply_style({ type = Style.Types.highlight, hl_name = "NarrowMatch" })
-            :mark_entry(entry_result_index, self.entry_result_namespace_id)-- mark this as a selectable entry
-            :render(self.results_canvas)
+        local match_text = match.match.text
+        local front_fragment = result_text:sub(next_match_offset, match.start)
+        table.insert(style_frags, Style:new():render(front_fragment))
+        table.insert(style_frags, Style:new():add_highlight("NarrowMatch"):render(match_text))
+        next_match_offset = match.start + #match_text + 1
       end
+      table.insert(style_frags, Style:new():render(result_text:sub(next_match_offset)))
 
-      local line_number = rg_message.data.line_number
-      Text:new()
-          :set_text(line_number)
-          :set_dimensions(5, 1)
-          :set_alignment(Text.AlignmentType.right)
-          :set_pos(0, row)
-          :apply_style({ type = Style.Types.virtual_text, hl_name = "Comment", pos_type = "overlay" })
-          :render(self.header_canvas)
+      local result_line = Style.join.horizontal(style_frags)
 
+      result_line:mark_selectable(function()
+        if submatches then
+          api.nvim_set_current_win(self.prev_win)
+          api.nvim_command("edit " .. rg_message.data.path.text)
+          for _, match in ipairs(submatches) do
+            api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
+            return true
+          end
+        end
+      end)
+
+      self.results_canvas:write(result_line)
+
+      -- local line_number = rg_message.data.line_number
+      -- local row_header = Style:new()
+      --     :width(5)
+      --     :height(1)
+      --     :align(Style.Align.Right)
+      --     :add_highlight("Comment")
+      --     :render(line_number)
+      --
+      -- self.header_canvas:write(row_header)
       self.entry_to_result[entry_result_index] = rg_message
 
       row = row + 1
@@ -234,89 +236,65 @@ function SearchProvider:render_rg_messages()
     end
   end
 
-  self.results_canvas:render()
+  self.results_canvas:render_new()
   self.header_canvas:render()
-  self:render_hud()
+  -- self:render_hud()
 end
 
 function SearchProvider:render_hud()
   self.hud_canvas:clear()
   self.input_canvas:clear(nil, true)
 
-  local namespace_id = self.entry_result_namespace_id
-
-  local entry = self.results_canvas:get_entry_at_cursor(namespace_id)
-  if entry == nil then
-    namespace_id = self.entry_header_namespace_id
-    entry = self.results_canvas:get_entry_at_cursor(namespace_id)
-  end
-
-  -- results
-  if entry ~= nil then
-    local entry_index = entry[1] -- id is the index in namespace
-    local entries = self.results_canvas:get_all_entries(namespace_id)
-    local input_width, _ = self.input_canvas:get_dimensions()
-
-    Text
+  -- local namespace_id = self.entry_result_namespace_id
+  --
+  -- local entry = self.results_canvas:get_entry_at_cursor(namespace_id)
+  -- if entry == nil then
+  --   namespace_id = self.entry_header_namespace_id
+  --   entry = self.results_canvas:get_entry_at_cursor(namespace_id)
+  -- end
+  --
+  -- -- results
+  -- if entry ~= nil then
+  --   local entry_index = entry[1] -- id is the index in namespace
+  --   local entries = self.results_canvas:get_all_entries(namespace_id)
+  --   local input_width, _ = self.input_canvas:get_dimensions()
+  --
+  --   Text
+  --       :new()
+  --       :set_text(string.format("%d/%d  ", entry_index, #entries))
+  --       --:apply_style({ type = Style.Types.virtual_text, hl_name = "Comment", pos_type = "overlay" })
+  --       :set_alignment(Text.AlignmentType.right)
+  --       :set_dimensions(8, 1)
+  --       :set_pos(input_width - 8, 0)
+  --       :render(self.input_canvas)
+  -- end
+  local line = Style.join.horizontal({
+    Style
         :new()
-        :set_text(string.format("%d/%d  ", entry_index, #entries))
-        :apply_style({ type = Style.Types.virtual_text, hl_name = "Comment", pos_type = "overlay" })
-        :set_alignment(Text.AlignmentType.right)
-        :set_dimensions(8, 1)
-        :set_pos(input_width - 8, 0)
-        :render(self.input_canvas)
-  end
+        :margin_left(100)
+        :margin_right(1)
+        :add_highlight("Function")
+        :render("hello world.\nthis is the first block"),
+    Style
+        :new()
+        :border()
+        :add_highlight("comment")
+        :render("This is the second block.")
+  })
+  self.hud_canvas:write(line)
 
-  local input_width, _ = self.input_canvas:get_dimensions()
-  local style
-  if self.store:get_state().enable_regex then
-    style = { type = Style.Types.highlight, hl_name = "Function" }
-  else
-    style = { type = Style.Types.highlight, hl_name = "Comment" }
-  end
-
-  -- Button
-  --     :new()
-  --     :set_pos(input_width + 4, 0)
-  --     :apply_style(style)
-  --     :set_text(Text:new():set_text("regex"))
-  --     :render(self.hud_canvas)
+  -- self.hud_canvas:write(
+  --   Style
+  --       :new()
+  --       :border()
+  --       :margin_left(100)
+  --       :margin_right(1)
+  --       :add_highlight("Function")
+  --       :render("hello world.\nthis is the first block"))
 
 
-  Button
-      :new()
-      :set_pos(input_width + 30, 0)
-      :apply_style(style)
-      :set_text(Text:new():set_text(" Z "))
-      :render(self.hud_canvas)
-
-  Button
-      :new()
-      :set_pos(input_width + 20, 0)
-      :apply_style(style)
-      :set_text(Text:new():set_text(" 😀 "))
-      :render(self.hud_canvas)
-
-  Text:new()
-    :set_text("regex")
-    :set_pos(input_width + 4, 0)
-    :render(self.hud_canvas)
-
-  Text:new()
-    :set_text("regex")
-    :set_pos(input_width + 10, 0)
-    :render(self.hud_canvas)
-
-  Text:new()
-    :set_text("blahz")
-    :set_pos(input_width + 10, 0)
-    :render(self.hud_canvas)
-
-  self.hud_canvas:render()
+  self.hud_canvas:render_new()
   self.input_canvas:render(true)
 end
 
 return SearchProvider
-
-
-

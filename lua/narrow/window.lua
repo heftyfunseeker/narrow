@@ -126,6 +126,7 @@ end
 -- pos: { row, col_start, col_end }
 function Window:add_highlight(hl_name, pos)
   -- @todo: namespaces
+  if not pos then return end
   api.nvim_buf_add_highlight(self.buf, -1, hl_name, pos.row, pos.col_start, pos.col_end)
 end
 
@@ -154,32 +155,8 @@ function Window:add_entry(entry_id, pos, namespace)
   api.nvim_buf_set_extmark(self.buf, namespace, pos.row, 0, opts)
 end
 
--- List of [extmark_id, row, col] tuples in "traversal order".
-function Window:get_entry_at_cursor(namespace)
-  if namespace == nil then
-    namespace = entry_namespace_id
-  end
-
-  local row = api.nvim_win_get_cursor(self.win)[1] - 1
-  return self:get_entry_at_row(row, namespace)
-end
-
-function Window:get_entry_at_row(row, namespace)
-  if namespace == nil then
-    namespace = entry_namespace_id
-  end
-
-  local entries = api.nvim_buf_get_extmarks(self.buf, namespace, { row, 0 }, { row, -1 }, { limit = 1 })
-  return entries[1]
-end
-
-function Window:get_all_entries(namespace)
-  if namespace == nil then
-    namespace = entry_namespace_id
-  end
-
-  -- we could eventually support entry
-  return api.nvim_buf_get_extmarks(self.buf, namespace, 0, -1, {})
+function Window:get_cursor_location()
+  return api.nvim_win_get_cursor(self.win)
 end
 
 return Window

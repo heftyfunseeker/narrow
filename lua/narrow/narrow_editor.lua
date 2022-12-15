@@ -210,6 +210,8 @@ function NarrowEditor:_init_provider(config)
     entry_header_namespace_id = self.entry_header_namespace_id,
     entry_result_namespace_id = self.entry_result_namespace_id,
 
+    prev_win = self.prev_win,
+
     config = config,
     store = self.store
   }
@@ -245,14 +247,7 @@ function NarrowEditor:on_cursor_moved()
 end
 
 function NarrowEditor:on_selected()
-  if self.results_window == nil then return false end
-
-  local entry = self.results_window:get_entry_at_cursor(self.entry_result_namespace_id)
-  if entry == nil then return false end
-
-  if not self.provider then return false end
-
-  return self.provider:on_selected(entry, self.prev_win)
+  return self.provider:on_selected()
 end
 
 function NarrowEditor:set_focus_results_window()
