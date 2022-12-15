@@ -42,6 +42,12 @@ function Window:set_pos(col, row)
   return self
 end
 
+
+function Window:set_z_index(z_index)
+  self.win_config.zindex = z_index
+  return self
+end
+
 function Window:set_dimensions(width, height)
   self.win_config.width = width
   self.win_config.height = height

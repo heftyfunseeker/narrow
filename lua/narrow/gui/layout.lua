@@ -61,6 +61,7 @@ function Layout:render()
 
   self.input_window
       :set_pos(input_pos_x, input_pos_y)
+      :set_z_index(99)
       :set_dimensions(input_width, input_height)
       :render()
 

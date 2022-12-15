@@ -1,9 +1,17 @@
 local TextBlock = require("narrow.gui.text_block")
 
 Style = {
-  -- layout module
-  join = {}
+  -- modules and constants/enums
+  join = {},
+  align = {
+    horizontal = {
+      Left = 0,
+      Center = 1,
+      Right = 2,
+    }
+  }
 }
+
 Style.__index = Style
 
 function Style:new()
@@ -16,10 +24,21 @@ function Style:new()
       top = nil,
       bottom = nil,
     },
+    horizontal_align = nil,
     has_border = false,
     hl_name = nil,
   }
   return setmetatable(new_obj, self)
+end
+
+function Style:set_width(width)
+  self.width = width
+  return self
+end
+
+function Style:set_height(height)
+  self.height = height
+  return self
 end
 
 function Style:margin_right(n)
@@ -48,6 +67,11 @@ function Style:border()
   return self
 end
 
+function Style:align_horizontal(horizontal_align)
+  self.horizontal_align = horizontal_align
+  return self
+end
+
 -- 1. apply padding
 -- 2. apply border
 -- 3. appy margin
@@ -62,8 +86,9 @@ function Style:render(text)
   end
 
   -- apply height first so we have the same number of lines when applying width
+  self:_apply_horizontal_alignment(text_block)
+  -- @todo: _apply_vertical_alignment
   text_block:apply_height(self.height)
-  text_block:apply_width(self.width)
 
   text_block:apply_highlight(self.hl_name)
   text_block:mark_selectable(self.on_selected)
@@ -72,6 +97,22 @@ function Style:render(text)
   text_block = self:apply_margin(text_block)
 
   return text_block
+end
+
+function Style:_apply_horizontal_alignment(text_block)
+  local align_type = self.horizontal_align
+  if not align_type then
+    align_type = Style.align.horizontal.Left
+  end
+
+  local padding_pos
+  if align_type == Style.align.horizontal.Right then
+    padding_pos = TextBlock.padding.position.Front
+  elseif align_type == Style.align.horizontal.left then
+    padding_pos = TextBlock.padding.position.Back
+  end
+
+  text_block:apply_width(self.width, padding_pos)
 end
 
 function Style:apply_margin(text_block)

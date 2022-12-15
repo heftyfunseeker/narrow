@@ -3,7 +3,14 @@
 -- highlight: {hl_name, pos},
 -- on_select_info: { pos, on_selected }
 
-local TextBlock = {}
+local TextBlock = {
+  padding = {
+    position = {
+      Front = 0,
+      Back = 1,
+    }
+  }
+}
 TextBlock.__index = TextBlock
 
 function TextBlock:new()
@@ -52,15 +59,23 @@ end
 
 -- pads lines with spaces so that each line has the same display width
 -- if width is less than the block's max width, max width is used
-function TextBlock:apply_width(width)
+function TextBlock:apply_width(width, padding_pos)
   local max_width = self:width()
   if not width or max_width > width then
     width = max_width
   end
 
+  if not padding_pos then
+    padding_pos = TextBlock.padding.position.Back
+  end
+
   for _, line in ipairs(self) do
     local line_width = vim.fn.strdisplaywidth(line.text)
-    line.text = line.text .. string.rep(" ", width - line_width)
+    if padding_pos == TextBlock.padding.position.Back then
+      line.text = line.text .. string.rep(" ", width - line_width)
+    else
+      line.text = string.rep(" ", width - line_width) .. line.text
+    end
   end
   return self
 end
