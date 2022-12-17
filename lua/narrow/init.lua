@@ -17,6 +17,7 @@ function init_narrow()
       au!
       au VimResized * :lua require("narrow")._resize()
       au CursorMoved * :lua require("narrow")._on_cursor_moved() 
+      au CursorMovedI * :lua require("narrow")._on_cursor_moved_insert() 
     augroup END
   ]])
 end
@@ -103,5 +104,10 @@ M._on_cursor_moved = function()
   narrow_editor:on_cursor_moved()
 end
 
+M._on_cursor_moved_insert = function()
+  if not narrow_editor then return end
+
+  narrow_editor:on_cursor_moved_insert()
+end
 
 return M

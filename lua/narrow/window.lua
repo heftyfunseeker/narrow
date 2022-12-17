@@ -8,8 +8,6 @@ local namespace_id = api.nvim_create_namespace("narrow/window")
 local entry_namespace_id = api.nvim_create_namespace("narrow/window/entry")
 
 function Window:new()
-
-
   local new_obj = {
     buf_options = {},
     win_options = {},
@@ -41,7 +39,6 @@ function Window:set_pos(col, row)
   self.win_config.row = row
   return self
 end
-
 
 function Window:set_z_index(z_index)
   self.win_config.zindex = z_index

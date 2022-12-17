@@ -121,16 +121,6 @@ function NarrowEditor:_build_layout(config)
   self.results_window = results_window
   self.results_window:set_lines({})
 
-  api.nvim_buf_attach(self.results_window.buf, false, {
-    on_detach = function(_, _)
-      vim.on_key(nil, self.namespace_id)
-    end,
-  })
-
-  vim.on_key(function(key)
-    self:on_key(key)
-  end, self.namespace_id)
-
   -- create floating window hud
   self.hud_window = hud_window
 
@@ -224,13 +214,6 @@ function NarrowEditor:get_config()
   return self.config
 end
 
-function NarrowEditor:apply_config(config)
-  -- -- apply any visual updates to the hud
-  -- if self.hud_window then
-  --   self:_render_hud()
-  -- end
-end
-
 function NarrowEditor:resize()
   if self.layout then
     self.layout:render()
@@ -246,6 +229,28 @@ function NarrowEditor:on_cursor_moved()
   self.provider:on_cursor_moved()
 end
 
+function NarrowEditor:on_cursor_moved_insert()
+  local curr_win = api.nvim_get_current_win()
+
+  if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
+    return
+  end
+
+  local query = self.input_window:get_buffer_lines(0, 1)[1]
+  local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
+  local _, e = string.find(query, prompt_text)
+  query = query:sub(e + 1)
+
+  if self.store:get_state().query == query then
+    return
+  end
+
+  self.store:dispatch({
+    type = "query_updated",
+    payload = query
+  })
+end
+
 function NarrowEditor:on_selected()
   return self.provider:on_selected()
 end
@@ -256,42 +261,6 @@ end
 
 function NarrowEditor:set_focus_input_window()
   api.nvim_set_current_win(self.input_window.win)
-end
-
-function NarrowEditor:on_key(key)
-  local escape_key = "\27"
-  if key == escape_key then
-    return
-  end
-
-  local curr_win = api.nvim_get_current_win()
-
-  -- early return if we arent' making a query
-  if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
-    return
-  end
-
-  self.debounce_count = self.debounce_count + 1
-  vim.defer_fn(function()
-    if self.results_window == nil or self.input_window == nil then
-      return
-    end
-
-    self.debounce_count = self.debounce_count - 1
-    if self.debounce_count > 0 then
-      return
-    end
-
-    local query = self.input_window:get_buffer_lines(0, 1)[1]
-    local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
-    local _, e = string.find(query, prompt_text)
-    query = query:sub(e + 1)
-
-    self.store:dispatch({
-      type = "query_updated",
-      payload = query
-    })
-  end, 5)
 end
 
 -- @todo: To reload opened files that have changed because of this function,
