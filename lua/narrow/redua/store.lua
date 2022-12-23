@@ -6,7 +6,7 @@ Store.__index = Store
 function Store:new(reducer)
   local new_obj = {
     reducer = reducer,
-    state = nil,
+    state = {},
     listeners = {}
   }
   return setmetatable(new_obj, self)
@@ -14,6 +14,7 @@ end
 
 function Store:dispatch(action)
   self.state = self.reducer(self.state, action)
+
   for _, listener in ipairs(self.listeners) do
     listener()
   end

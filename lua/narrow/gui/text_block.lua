@@ -71,10 +71,12 @@ function TextBlock:apply_width(width, padding_pos)
 
   for _, line in ipairs(self) do
     local line_width = vim.fn.strdisplaywidth(line.text)
-    if padding_pos == TextBlock.padding.position.Back then
-      line.text = line.text .. string.rep(" ", width - line_width)
-    else
-      line.text = string.rep(" ", width - line_width) .. line.text
+    if line_width < width then
+      if padding_pos == TextBlock.padding.position.Back then
+        line.text = line.text .. string.rep(" ", width - line_width)
+      else
+        line.text = string.rep(" ", width - line_width) .. line.text
+      end
     end
   end
   return self
@@ -103,11 +105,17 @@ local function make_hl(hl_name, row, col_start, col_end)
   }
 end
 
-function TextBlock:apply_highlight(hl_name)
+function TextBlock:apply_highlight(hl_name, opts)
   if not hl_name then return end
 
+  local col_start = opts.col_start
+  if not col_start then col_start = 0 end
+
+
   for row, line in ipairs(self) do
-    line.highlights = { make_hl(hl_name, row, 0, #line.text) }
+    local col_end = opts.col_end
+    if not col_end then col_end = #line.text end
+    table.insert(line.highlights,  make_hl(hl_name, row, col_start, col_end))
   end
 end
 

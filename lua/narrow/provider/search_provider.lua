@@ -1,6 +1,5 @@
 local Utils = require("narrow.narrow_utils")
 local Devicons = require("nvim-web-devicons")
-local RipgrepParser = require("narrow.provider.ripgrep_parser")
 
 local api = vim.api
 
@@ -11,21 +10,29 @@ SearchProvider.__index = SearchProvider
 function SearchProvider:new(editor_context)
   local this = Utils.array.shallow_copy(editor_context)
 
-  this.ripgrep_parser = RipgrepParser:new()
-
   this.store:subscribe(function()
     this:on_store_updated()
   end)
 
-  return setmetatable(this, self)
+  this = setmetatable(this, self)
+
+  -- move this into the 
+  local prompt_text = "   "
+  vim.fn.prompt_setprompt(this.input_canvas.window.buf, prompt_text)
+
+  this:_render_query("")
+
+  return this
 end
 
 function SearchProvider:handle_action(state, action)
   local action_map = {
     init_store = function(_)
       return {
+        query = nil,
+        completed_queries = {},
         rg_messages = nil,
-        enable_regex = false -- @todo: come from config
+        enable_regex = false
       }
     end,
 
@@ -47,14 +54,49 @@ function SearchProvider:handle_action(state, action)
       return new_state
     end,
 
+    input_insert_leave = function()
+      local new_state = Utils.array.shallow_copy(state)
+      if state.completed_queries[-1] ~= state.query and #state.query >= 2 then
+        table.insert(new_state.completed_queries, new_state.query)
+      end
+      return new_state
+    end,
+
     rg_messages_parsed = function(rg_messages)
       local new_state = Utils.array.shallow_copy(state)
       new_state.rg_messages = rg_messages
       return new_state
     end,
+
+    prev_query = function()
+      local new_state = Utils.array.shallow_copy(state)
+      local query = table.remove(new_state.completed_queries)
+      new_state.query = query
+      table.insert(new_state.completed_queries, 1, query)
+
+      return new_state
+    end,
+
+    next_query = function()
+      local new_state = Utils.array.shallow_copy(state)
+      local query = table.remove(new_state.completed_queries, 1)
+      new_state.query = query
+      table.insert(new_state.completed_queries, query)
+
+      return new_state
+    end
   }
 
   return action_map[action.type](action.payload)
+end
+
+function SearchProvider:_render_query(query)
+  local prompt = Style:new():add_highlight("Identifier"):render("   ")
+  local styled_query = Style:new():add_highlight("NarrowMatch"):render(query)
+
+  self.input_canvas:clear()
+  self.input_canvas:write(Style.join.horizontal({ prompt, styled_query }))
+  self.input_canvas:render_new()
 end
 
 function SearchProvider:on_store_updated()
@@ -66,8 +108,10 @@ function SearchProvider:on_store_updated()
   if results_updated then
     self.prev_rg_messages = state.rg_messages
     self:render_rg_messages()
-  elseif query ~= nil and #query >= 2 then
+  elseif query ~= nil and #query >= 2 and self.prev_query ~= query then
+    self.prev_query = query
     self:search(query)
+    self:_render_query(query)
   end
 
   self:render_hud()
@@ -103,12 +147,12 @@ function SearchProvider:build_rg_args(query_term)
 end
 
 function SearchProvider:search(query_term)
-  -- clear previous results out
-  local rg_messages = {}
-  self.ripgrep_parser:reset()
+  local rg_messages = { "[" }
 
   if Stdout ~= nil then
     Stdout:read_stop()
+    Stdout:close()
+    Stdout = nil
   end
 
   if Handle ~= nil then
@@ -130,6 +174,10 @@ function SearchProvider:search(query_term)
       Handle:close()
       Handle = nil
 
+      local messages = table.concat(rg_messages)
+      local message_lines = table.concat(vim.split(messages, "\n", { trimempty = true }), ",")
+      rg_messages = vim.json.decode(message_lines .. "]")
+
       self.store:dispatch({ type = "rg_messages_parsed", payload = rg_messages })
     end)
   )
@@ -140,7 +188,7 @@ function SearchProvider:search(query_term)
     end
 
     if input_stream then
-      self.ripgrep_parser:parse_stream(input_stream, rg_messages)
+      table.insert(rg_messages, input_stream)
     end
   end)
 
@@ -184,35 +232,50 @@ function SearchProvider:render_rg_messages()
     elseif rg_message.type == "match" then
       local result_text = rg_message.data.lines.text:sub(0, -2)
 
-      local submatches = rg_message.data.submatches
+      local result_line
+      local on_select
 
-      local next_match_offset = 0
-      local style_frags = {}
-
-      -- Split the result string into fragments to build a styled line.
-      for _, match in ipairs(submatches) do
-        local match_text = match.match.text
-        local front_fragment = result_text:sub(next_match_offset, match.start)
-        table.insert(style_frags, Style:new():render(front_fragment))
-        table.insert(style_frags, Style:new():add_highlight("NarrowMatch"):render(match_text))
-        next_match_offset = match.start + #match_text + 1
-      end
-      table.insert(style_frags, Style:new():render(result_text:sub(next_match_offset)))
-
-      local result_line = Style.join.horizontal(style_frags)
-
-      -- @todo: I could add this on the fragment to support multiple matches per line
-      result_line:mark_selectable(function()
-        if submatches then
+      if #result_text > 1024 then
+        result_line = Style:new():add_highlight("Error"):render("[...long line suppressed...]")
+        on_select = function()
           api.nvim_set_current_win(self.prev_win)
           api.nvim_command("edit " .. rg_message.data.path.text)
-          for _, match in ipairs(submatches) do
-            api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
-            return true
+          api.nvim_win_set_cursor(0, { rg_message.data.line_number, 0 })
+        end
+      else
+        local submatches = rg_message.data.submatches
+
+        -- treesitter highlighting
+        local result_style = Style:new()
+        -- local language = vim.filetype.match({ filename = rg_message.data.path.text })
+        -- if language then
+        --   local ts_hls = Utils.hl_string(result_text, language)
+        --   for _, hl in ipairs(ts_hls) do
+        --     result_style:add_highlight(hl.hl_name, { col_start = hl.pos.col1, col_end = hl.pos.col2 })
+        --   end
+        -- end
+
+        -- Split the result string into fragments to build a styled line.
+        for _, match in ipairs(submatches) do
+          local match_text = match.match.text
+          result_style:add_highlight("NarrowMatch", { col_start = match.start, col_end = match.start + #match_text })
+        end
+
+        result_line = result_style:render(result_text)
+        on_select = function()
+          if submatches then
+            api.nvim_set_current_win(self.prev_win)
+            api.nvim_command("edit " .. rg_message.data.path.text)
+            for _, match in ipairs(submatches) do
+              api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
+              return true
+            end
           end
         end
-      end)
+      end
 
+      -- @todo: I could add this on the fragment to support multiple matches per line
+      result_line:mark_selectable(on_select)
       self.results_canvas:write(result_line)
 
       local line_number = rg_message.data.line_number
@@ -233,7 +296,6 @@ end
 
 function SearchProvider:render_hud()
   self.hud_canvas:clear()
-  self.input_canvas:clear()
 
   local input_width, _ = self.input_canvas:get_dimensions()
   -- local namespace_id = self.entry_result_namespace_id
@@ -264,7 +326,7 @@ function SearchProvider:render_hud()
         :new()
         :margin_left(input_width + 3)
         :border()
-        :add_highlight("Function")
+        :add_highlight("@text.title")
         :render(" < "),
     Style
         :new()
@@ -285,7 +347,6 @@ function SearchProvider:render_hud()
 
 
   self.hud_canvas:render_new()
-  self.input_canvas:render(true)
 end
 
 return SearchProvider

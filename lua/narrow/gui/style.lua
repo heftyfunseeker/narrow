@@ -26,7 +26,7 @@ function Style:new()
     },
     horizontal_align = nil,
     has_border = false,
-    hl_name = nil,
+    highlights = {},
   }
   return setmetatable(new_obj, self)
 end
@@ -51,9 +51,9 @@ function Style:margin_left(n)
   return self
 end
 
--- api.nvim_buf_add_highlight(self.buf, -1, hl_name, pos.row, pos.col_start, pos.col_end)
-function Style:add_highlight(hl_name)
-  self.hl_name = hl_name
+function Style:add_highlight(hl_name, opts)
+  if not opts then opts = {} end
+  table.insert(self.highlights, { hl_name = hl_name, opts = opts })
   return self
 end
 
@@ -90,7 +90,10 @@ function Style:render(text)
   -- @todo: _apply_vertical_alignment
   text_block:apply_height(self.height)
 
-  text_block:apply_highlight(self.hl_name)
+  for _, hl in ipairs(self.highlights) do
+    text_block:apply_highlight(hl.hl_name, hl.opts)
+  end
+
   text_block:mark_selectable(self.on_selected)
 
   text_block = self:apply_border(text_block)

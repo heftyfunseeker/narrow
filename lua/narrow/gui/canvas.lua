@@ -50,9 +50,7 @@ function Canvas:render_new()
 end
 
 -- @todo: lets have the canvas cache all used namespaces to do this book keeping for us
-function Canvas:clear(additional_namespaces, only_styles)
-  self.window:clear(additional_namespaces, only_styles)
-
+function Canvas:clear()
   self.lines = {}
   self.num_rows = 0
 

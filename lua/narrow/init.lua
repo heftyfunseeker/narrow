@@ -18,6 +18,7 @@ function init_narrow()
       au VimResized * :lua require("narrow")._resize()
       au CursorMoved * :lua require("narrow")._on_cursor_moved() 
       au CursorMovedI * :lua require("narrow")._on_cursor_moved_insert() 
+      au InsertLeave * :lua require("narrow")._on_insert_leave() 
     augroup END
   ]])
 end
@@ -88,7 +89,19 @@ end
 M.toggle_regex = function()
   if not narrow_editor then return end
 
-  narrow_editor:get_store():dispatch({type = "toggle_regex" })
+  narrow_editor:get_store():dispatch({ type = "toggle_regex" })
+end
+
+M.prev_query = function()
+  if not narrow_editor then return end
+
+  narrow_editor:get_store():dispatch({ type = "prev_query" })
+end
+
+M.next_query = function()
+  if not narrow_editor then return end
+
+  narrow_editor:get_store():dispatch({ type = "next_query" })
 end
 
 -- TODO these should be private
@@ -99,15 +112,27 @@ M._resize = function()
 end
 
 M._on_cursor_moved = function()
-  if not narrow_editor then return end
-
-  narrow_editor:on_cursor_moved()
+  local a = vim.schedule_wrap(function()
+    if not narrow_editor then return end
+    narrow_editor:on_cursor_moved()
+  end)
+  a()
 end
 
 M._on_cursor_moved_insert = function()
-  if not narrow_editor then return end
+  local a = vim.schedule_wrap(function()
+    if not narrow_editor then return end
+    narrow_editor:on_cursor_moved_insert()
+  end)
+  a()
+end
 
-  narrow_editor:on_cursor_moved_insert()
+M._on_insert_leave = function()
+  local a = vim.schedule_wrap(function()
+    if not narrow_editor then return end
+    narrow_editor:on_insert_leave()
+  end)
+  a()
 end
 
 return M

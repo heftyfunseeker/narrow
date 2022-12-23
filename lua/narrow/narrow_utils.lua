@@ -57,65 +57,24 @@ M.array.shallow_copy = function(source)
   return copy
 end
 
-M.get_parser = function(result_header)
-  -- TODO: do this correctly
-  local ext_to_type = {}
-  ext_to_type[".lua"] = "lua"
-  ext_to_type[".rs"] = "rust"
-  ext_to_type[".md"] = "markdown"
-  ext_to_type[".vim"] = "vim"
+M.hl_string = function(str, ft)
+  --@todo use this to check for parser availability
+  -- local _, ts_parsers = pcall(require, "nvim-treesitter.parsers")
+  local parser = vim.treesitter.get_string_parser(str, ft)
+  local tree = parser:parse()[1]
 
-  local ext = M.get_file_extension(result_header)
-  local ft = ext_to_type[ext]
-  if ft == nil then
-    ft = ext:sub(2, -1)
-  end
+  local query = vim.treesitter.get_query(ft, "highlights")
 
-  return ft
-end
-
-M.hl_buffer = function(state, result_header)
-  local _, ts_parsers = pcall(require, "nvim-treesitter.parsers")
-  local ft_parser = nil
-  local ft = M.get_parser(result_header)
-  if ts_parsers.has_parser(ft) then
-    ft_parser = vim.treesitter._create_parser(state.results_buf, ft)
-  end
-  if ft_parser ~= state.current_parser then
-    if state.current_hl then
-      state.current_hl:destroy()
-      state.current_hl = nil
+  local hl_infos = {}
+  for id, node, _ in query:iter_captures(tree:root(), str, 0, 1) do
+    local hl_name = "@" .. query.captures[id] -- name of the capture in the query
+    local row1, col1, row2, col2 = node:range() -- range of the capture
+    if hl_name ~= "@spell" and hl_name ~= "@error" then
+      table.insert(hl_infos, { hl_name = hl_name, pos = { row1 = row1, col1 = col1, row2 = row2, col2 = col2 } })
     end
-    state.current_parser = ft_parser
   end
 
-  if ft_parser then
-    state.current_hl = vim.treesitter.highlighter.new(ft_parser)
-  else
-    vim.api.nvim_buf_set_option(state.preview_buf, "syntax", ft)
-  end
-end
-
-M.hl_results = function(state, result_header)
-  local _, ts_parsers = pcall(require, "nvim-treesitter.parsers")
-  local ft_parser = nil
-  local ft = M.get_parser(result_header)
-  if ts_parsers.has_parser(ft) then
-    ft_parser = vim.treesitter._create_parser(state.results_buf, ft)
-  end
-  if ft_parser ~= state.current_parser then
-    if state.current_hl then
-      state.current_hl:destroy()
-      state.current_hl = nil
-    end
-    state.current_parser = ft_parser
-  end
-
-  if ft_parser then
-    state.current_hl = vim.treesitter.highlighter.new(ft_parser)
-  else
-    vim.api.nvim_buf_set_option(state.preview_buf, "syntax", ft)
-  end
+  return hl_infos
 end
 
 return M
