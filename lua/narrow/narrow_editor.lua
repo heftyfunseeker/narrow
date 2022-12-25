@@ -294,46 +294,8 @@ function NarrowEditor:set_focus_input_window()
   api.nvim_set_current_win(self.input_window.win)
 end
 
--- @todo: To reload opened files that have changed because of this function,
--- should we iterate through open file that were modified and `:e!` to reload them?
--- Maybe we have this as a settings for users to configure?
 function NarrowEditor:update_real_file()
-  -- the lines we set initially from the canvas
-  local original_lines = self.results_window:get_lines()
-  -- the lines that are currently visible on screen
-  local buffer_lines = self.results_window:get_buffer_lines(0, -1)
-
-  if #buffer_lines ~= #original_lines then
-    print("narrow warning: Cannot update files. Number of lines were modified")
-    return
-  end
-
-  local changes = {}
-  for row, line in ipairs(buffer_lines) do
-    local original_line = original_lines[row]
-    if line ~= original_line then
-      local entry = self.results_window:get_entry_at_row(row - 1, self.entry_result_namespace_id)
-      if entry == nil then
-        print("narrow warning: Entry was corrupted. Aborting update to files")
-        return
-      end
-      local narrow_result = self.narrow_results[entry[1]]
-      table.insert(changes, { narrow_result = narrow_result, changed_text = line })
-    end
-  end
-
-  -- -- todo pop-up confirmation modal instead
-  print("narrow: Applying " .. #changes .. " changes to real files")
-
-  -- TODO: batch these changes by header to avoid the io thrashing
-  for _, change in ipairs(changes) do
-    local nr = change.narrow_result
-    local file_lines = narrow_utils.string_to_lines(narrow_utils.read_file_sync(change.narrow_result.header))
-    file_lines[nr.row] = change.changed_text
-    narrow_utils.write_file_sync(change.narrow_result.header, table.concat(file_lines, "\n"))
-  end
-
-  print("narrow: Finished applying " .. #changes .. " changes")
+  self.provider:update_real_file()
 end
 
 return NarrowEditor

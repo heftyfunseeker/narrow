@@ -1,7 +1,7 @@
 -- TextBlock: An array of lines where each line is an object {
 -- text,
 -- highlight: {hl_name, pos},
--- on_select_info: { pos, on_selected }
+-- states: { pos, state }
 
 local TextBlock = {
   padding = {
@@ -18,27 +18,25 @@ function TextBlock:new()
   return setmetatable(new_obj, self)
 end
 
-function TextBlock:from_string(text)
+function TextBlock:from_string(text, trim_empty)
   if type(text) ~= "string" then
     print("Error- TextBlock:new expected type string")
   end
 
   local new_obj = {}
+  if text == "" then
+    table.insert(new_obj, { text = text, highlights = {}, states = {} })
+  else
+    if not trim_empty then trim_empty = true end
 
-  local lines = vim.fn.split(text, "\n")
-  for _, line in ipairs(lines) do
-    table.insert(new_obj, { text = line, highlights = {}, on_selected = {} })
+    local lines = vim.split(text, "\n", { trimempty = trim_empty })
+    for _, line in ipairs(lines) do
+      table.insert(new_obj, { text = line, highlights = {}, states = {} })
+    end
   end
 
+
   return setmetatable(new_obj, self)
-end
-
-function TextBlock:add_line(text, highlights, on_selected)
-  if not highlights then highlights = {} end
-  if not on_selected then on_selected = {} end
-
-  table.insert(self, { text = text, highlights = highlights, on_selected = on_selected })
-  return self
 end
 
 function TextBlock:width()
@@ -89,7 +87,7 @@ function TextBlock:apply_height(height)
   end
 
   for _ = curr_height, height - 1, 1 do
-    table.insert(self, { text = "", highlights = {}, on_selected = {} })
+    table.insert(self, { text = "", highlights = {}, states = {} })
   end
   return self
 end
@@ -115,13 +113,13 @@ function TextBlock:apply_highlight(hl_name, opts)
   for row, line in ipairs(self) do
     local col_end = opts.col_end
     if not col_end then col_end = #line.text end
-    table.insert(line.highlights,  make_hl(hl_name, row, col_start, col_end))
+    table.insert(line.highlights, make_hl(hl_name, row, col_start, col_end))
   end
 end
 
-local function make_on_selected(on_selected, row, col_start, col_end)
+local function make_state(state, row, col_start, col_end)
   return {
-    on_selected = on_selected,
+    state = state,
     pos = {
       row = row,
       col_start = col_start,
@@ -130,11 +128,12 @@ local function make_on_selected(on_selected, row, col_start, col_end)
   }
 end
 
-function TextBlock:mark_selectable(on_selected)
-  if not on_selected then return end
+function TextBlock:set_state(state)
+  if not state then return end
 
   for row, line in ipairs(self) do
-    line.on_selected = { make_on_selected(on_selected, row, 0, #line.text) }
+    -- @todo: do we need to handle col start here?
+    line.states = { make_state(state, row, 0, #line.text) }
   end
 end
 

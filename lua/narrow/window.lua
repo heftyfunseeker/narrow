@@ -96,9 +96,12 @@ function Window:render()
   return self
 end
 
-function Window:set_lines(lines)
+function Window:set_lines(lines, start_line, end_line)
   self.lines = lines
-  api.nvim_buf_set_lines(self.buf, 0, -1, true, lines)
+  if not start_line then start_line = 0 end
+  if not end_line then end_line = -1 end
+
+  api.nvim_buf_set_lines(self.buf, start_line, end_line, true, lines)
 end
 
 function Window:clear(additional_namespaces, only_namespaces)

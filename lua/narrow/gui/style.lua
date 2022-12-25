@@ -1,6 +1,6 @@
 local TextBlock = require("narrow.gui.text_block")
 
-Style = {
+local Style = {
   -- modules and constants/enums
   join = {},
   align = {
@@ -57,11 +57,6 @@ function Style:add_highlight(hl_name, opts)
   return self
 end
 
-function Style:mark_selectable(on_selected)
-  self.on_selected = on_selected
-  return self
-end
-
 function Style:border()
   self.has_border = true
   return self
@@ -93,8 +88,6 @@ function Style:render(text)
   for _, hl in ipairs(self.highlights) do
     text_block:apply_highlight(hl.hl_name, hl.opts)
   end
-
-  text_block:mark_selectable(self.on_selected)
 
   text_block = self:apply_border(text_block)
   text_block = self:apply_margin(text_block)
@@ -138,13 +131,11 @@ function Style:apply_border(text_block)
   if not self.has_border then return text_block end
 
   local width = text_block:width()
-  local height = text_block:height()
+  -- local height = text_block:height()
 
   local top = TextBlock:from_string("╭" .. string.rep("─", width) .. "╮")
   local side = TextBlock:from_string("│")
-  for _ = 1, height - 1, 1 do
-    side:add_line("│")
-  end
+  -- @todo: to handle the height, just build .. ie "\n|\n|" the string first before the block
 
   local bordered_block = {}
   table.insert(bordered_block, top)
@@ -161,7 +152,7 @@ end
 Style.join.horizontal = function(text_blocks)
   local string_builder = {}
   local line_highlights = {}
-  local on_selected_marks = {}
+  local state_marks = {}
 
   local max_height = 0
   for _, text_block in ipairs(text_blocks) do
@@ -190,8 +181,8 @@ Style.join.horizontal = function(text_blocks)
         line_highlights[row] = {}
       end
 
-      if on_selected_marks[row] == nil then
-        on_selected_marks[row] = {}
+      if state_marks[row] == nil then
+        state_marks[row] = {}
       end
 
       -- shift highlights in this column by num preceding bytes
@@ -201,11 +192,11 @@ Style.join.horizontal = function(text_blocks)
         table.insert(line_highlights[row], hl)
       end
 
-      -- shift on_selected marks in this column by num preceding bytes
-      for _, on_selected in ipairs(line.on_selected) do
-        on_selected.pos.col_start = on_selected.pos.col_start + col_byte_offset
-        on_selected.pos.col_end = on_selected.pos.col_end + col_byte_offset
-        table.insert(on_selected_marks[row], on_selected)
+      -- shift state marks in this column by num preceding bytes
+      for _, state in ipairs(line.states) do
+        state.pos.col_start = state.pos.col_start + col_byte_offset
+        state.pos.col_end = state.pos.col_end + col_byte_offset
+        table.insert(state_marks[row], state)
       end
     end
   end
@@ -213,7 +204,7 @@ Style.join.horizontal = function(text_blocks)
   local new_text_block = TextBlock:new()
   for row, builder in pairs(string_builder) do
     local line = table.concat(builder)
-    table.insert(new_text_block, { text = line, highlights = line_highlights[row], on_selected = on_selected_marks[row] })
+    table.insert(new_text_block, { text = line, highlights = line_highlights[row], states = state_marks[row] })
   end
 
   return new_text_block
@@ -229,3 +220,5 @@ Style.join.vertical = function(text_blocks)
 
   return new_text_block
 end
+
+return Style

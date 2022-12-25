@@ -24,8 +24,8 @@ function Canvas:write(text_block)
       hl.pos.row = self.num_rows
     end
 
-    for _, on_selected in ipairs(line.on_selected) do
-      on_selected.pos.row = self.num_rows
+    for _, state in ipairs(line.states) do
+      state.pos.row = self.num_rows
     end
 
     table.insert(self.lines, line)
@@ -57,17 +57,14 @@ function Canvas:clear()
   self.selectable_text_blocks = {}
 end
 
-function Canvas:select_at_cursor()
-  local cursor = self.window:get_cursor_location()
-  local row = cursor[1]
-  local col = cursor[2]
-
+-- @todo: delete/move this to search_provider - provider should handle how to select things?
+function Canvas:get_state(row, col)
   local line = self.lines[row]
   if not line then return nil end
 
-  for _, selectable in ipairs(line.on_selected) do
-    if selectable.pos.col_start <= col and selectable.pos.col_end > col then
-      return selectable.on_selected()
+  for _, state in ipairs(line.states) do
+    if state.pos.col_start <= col and state.pos.col_end > col then
+      return state.state
     end
   end
 

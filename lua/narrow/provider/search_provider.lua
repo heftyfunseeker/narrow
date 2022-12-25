@@ -1,5 +1,7 @@
 local Utils = require("narrow.narrow_utils")
 local Devicons = require("nvim-web-devicons")
+local TextBlock = require("narrow.gui.text_block")
+local Style = require("narrow.gui.style")
 
 local api = vim.api
 
@@ -31,7 +33,7 @@ function SearchProvider:handle_action(state, action)
       return {
         query = nil,
         completed_queries = {},
-        rg_messages = nil,
+        rg_messages = {},
         enable_regex = false
       }
     end,
@@ -112,6 +114,8 @@ function SearchProvider:on_store_updated()
     self.prev_query = query
     self:search(query)
     self:_render_query(query)
+  else
+    self:render_rg_messages()
   end
 
   self:render_hud()
@@ -121,7 +125,24 @@ function SearchProvider:on_query_updated()
 end
 
 function SearchProvider:on_selected()
-  return self.results_canvas:select_at_cursor() == true
+  local cursor = self.results_canvas.window:get_cursor_location()
+  local row = cursor[1]
+  local col = cursor[2]
+
+  local rg_message = self.results_canvas:get_state(row, col)
+  if not rg_message or not rg_message.data then return false end
+
+  local submatches = rg_message.data.submatches
+  if not submatches then return false end
+
+  api.nvim_set_current_win(self.prev_win)
+  api.nvim_command("edit " .. rg_message.data.path.text)
+  for _, match in ipairs(submatches) do
+    api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
+    return true
+  end
+
+  return false
 end
 
 function SearchProvider:on_cursor_moved()
@@ -203,8 +224,8 @@ function SearchProvider:render_rg_messages()
 
   for _, rg_message in ipairs(rg_messages) do
     if rg_message.type == "end" then
-      self.results_canvas:write(Style:new():render("\n "))
-      self.header_canvas:write(Style:new():render("\n "))
+      self.results_canvas:write(TextBlock:from_string("", false))
+      self.header_canvas:write(TextBlock:from_string("", false))
     elseif rg_message.type == "begin" then
       local path = rg_message.data.path.text
       if path == nil then
@@ -230,13 +251,13 @@ function SearchProvider:render_rg_messages()
         :render(icon))
 
     elseif rg_message.type == "match" then
-      local result_text = rg_message.data.lines.text:sub(0, -2)
+      local result_text = rg_message.data.lines.text
 
       local result_line
       local on_select
 
       if #result_text > 1024 then
-        result_line = Style:new():add_highlight("Error"):render("[...long line suppressed...]")
+        result_line = Style:new():add_highlight("Error"):render("[long line]")
         on_select = function()
           api.nvim_set_current_win(self.prev_win)
           api.nvim_command("edit " .. rg_message.data.path.text)
@@ -275,7 +296,7 @@ function SearchProvider:render_rg_messages()
       end
 
       -- @todo: I could add this on the fragment to support multiple matches per line
-      result_line:mark_selectable(on_select)
+      result_line:set_state(rg_message)
       self.results_canvas:write(result_line)
 
       local line_number = rg_message.data.line_number
@@ -291,6 +312,9 @@ function SearchProvider:render_rg_messages()
 
   self.results_canvas:render_new()
   self.header_canvas:render_new()
+
+  api.nvim_win_set_cursor(self.results_canvas.window.win, { 1, 0 })
+  api.nvim_win_set_cursor(self.header_canvas.window.win, { 1, 0 })
   -- self:render_hud()
 end
 
@@ -347,6 +371,46 @@ function SearchProvider:render_hud()
 
 
   self.hud_canvas:render_new()
+end
+
+-- @todo: To reload opened files that have changed because of this function,
+-- should we iterate through open file that were modified and `:e!` to reload them?
+-- Maybe we have this as a settings for users to configure?
+function SearchProvider:update_real_file()
+  -- the lines we set initially from the canvas
+  local original_lines = self.results_canvas.window:get_lines()
+  -- the lines that are currently visible on screen
+  local buffer_lines = self.results_canvas.window:get_buffer_lines(0, -1)
+
+  if #buffer_lines ~= #original_lines then
+    print("narrow warning: Cannot update files. Number of lines were modified")
+    return
+  end
+
+  local changes = {}
+  for row, line in ipairs(buffer_lines) do
+    local original_line = original_lines[row]
+    if line ~= original_line then
+      local rg_message = self.results_canvas:get_state(row, 0)
+      if rg_message == nil then
+        print("narrow warning: State was corrupted. Aborting update to files")
+        return
+      end
+      table.insert(changes, { path = rg_message.data.path.text, row = rg_message.data.line_number, text = line })
+    end
+  end
+
+  -- -- todo pop-up confirmation modal instead
+  print("narrow: Applying " .. #changes .. " changes to real files")
+
+  -- TODO: batch these changes by header to avoid the io thrashing
+  for _, change in ipairs(changes) do
+    local file_lines = Utils.string_to_lines(Utils.read_file_sync(change.path))
+    file_lines[change.row] = change.text
+    Utils.write_file_sync(change.path, table.concat(file_lines, "\n"))
+  end
+
+  print("narrow: Finished applying " .. #changes .. " changes")
 end
 
 return SearchProvider
