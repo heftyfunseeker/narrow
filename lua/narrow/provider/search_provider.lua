@@ -258,44 +258,20 @@ function SearchProvider:render_rg_messages()
 
       if #result_text > 1024 then
         result_line = Style:new():add_highlight("Error"):render("[long line]")
-        on_select = function()
-          api.nvim_set_current_win(self.prev_win)
-          api.nvim_command("edit " .. rg_message.data.path.text)
-          api.nvim_win_set_cursor(0, { rg_message.data.line_number, 0 })
-        end
       else
         local submatches = rg_message.data.submatches
 
         -- treesitter highlighting
         local result_style = Style:new()
-        -- local language = vim.filetype.match({ filename = rg_message.data.path.text })
-        -- if language then
-        --   local ts_hls = Utils.hl_string(result_text, language)
-        --   for _, hl in ipairs(ts_hls) do
-        --     result_style:add_highlight(hl.hl_name, { col_start = hl.pos.col1, col_end = hl.pos.col2 })
-        --   end
-        -- end
 
-        -- Split the result string into fragments to build a styled line.
         for _, match in ipairs(submatches) do
           local match_text = match.match.text
           result_style:add_highlight("NarrowMatch", { col_start = match.start, col_end = match.start + #match_text })
         end
 
         result_line = result_style:render(result_text)
-        on_select = function()
-          if submatches then
-            api.nvim_set_current_win(self.prev_win)
-            api.nvim_command("edit " .. rg_message.data.path.text)
-            for _, match in ipairs(submatches) do
-              api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
-              return true
-            end
-          end
-        end
       end
 
-      -- @todo: I could add this on the fragment to support multiple matches per line
       result_line:set_state(rg_message)
       self.results_canvas:write(result_line)
 
