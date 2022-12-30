@@ -2,6 +2,8 @@ local Utils = require("narrow.narrow_utils")
 local Devicons = require("nvim-web-devicons")
 local TextBlock = require("narrow.gui.text_block")
 local Style = require("narrow.gui.style")
+local Canvas = require("narrow.gui.canvas")
+local Window = require("narrow.window")
 
 local api = vim.api
 
@@ -18,7 +20,7 @@ function SearchProvider:new(editor_context)
 
   this = setmetatable(this, self)
 
-  -- move this into the 
+  -- move this into the
   local prompt_text = "   "
   vim.fn.prompt_setprompt(this.input_canvas.window.buf, prompt_text)
 
@@ -86,6 +88,13 @@ function SearchProvider:handle_action(state, action)
       table.insert(new_state.completed_queries, query)
 
       return new_state
+    end,
+
+    key_pressed = function(key)
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.key_pressed = key
+
+      return new_state
     end
   }
 
@@ -119,9 +128,6 @@ function SearchProvider:on_store_updated()
   end
 
   self:render_hud()
-end
-
-function SearchProvider:on_query_updated()
 end
 
 function SearchProvider:on_selected()
@@ -246,7 +252,7 @@ function SearchProvider:render_rg_messages()
       self.header_canvas:write(Style
         :new()
         :set_width(5)
-        :align_horizontal(Style.align.horizontal.Right)
+        :align_horizontal(Style.position.Right)
         :add_highlight(hl_name)
         :render(icon))
 
@@ -277,7 +283,7 @@ function SearchProvider:render_rg_messages()
 
       local line_number = rg_message.data.line_number
       local row_header = Style:new()
-          :align_horizontal(Style.align.horizontal.Right)
+          :align_horizontal(Style.position.Right)
           :set_width(5)
           :add_highlight("Comment")
           :render(tostring(line_number))
@@ -335,17 +341,6 @@ function SearchProvider:render_hud()
         :render(" > "),
   })
   self.hud_canvas:write(line)
-
-  -- self.hud_canvas:write(
-  --   Style
-  --       :new()
-  --       :border()
-  --       :margin_left(100)
-  --       :margin_right(1)
-  --       :add_highlight("Function")
-  --       :render("hello world.\nthis is the first block"))
-
-
   self.hud_canvas:render_new()
 end
 
@@ -353,6 +348,10 @@ end
 -- should we iterate through open file that were modified and `:e!` to reload them?
 -- Maybe we have this as a settings for users to configure?
 function SearchProvider:update_real_file()
+  if true then
+    self:show_confirmation_window()
+  end
+
   -- the lines we set initially from the canvas
   local original_lines = self.results_canvas.window:get_lines()
   -- the lines that are currently visible on screen
@@ -387,6 +386,56 @@ function SearchProvider:update_real_file()
   end
 
   print("narrow: Finished applying " .. #changes .. " changes")
+end
+
+function SearchProvider:show_confirmation_window()
+  local columns = api.nvim_get_option("columns")
+  local lines = api.nvim_get_option("lines")
+
+  local height = 8
+  local width = 50
+  local pos_col = columns * .5 - width * .5
+  local pos_row = lines * .5 - height * .5 - 5
+
+  local window = Window
+      :new()
+      :set_buf_option("bufhidden", "wipe")
+      :set_buf_option("buftype", "nofile")
+      :set_buf_option("swapfile", false)
+      :set_win_option("wrap", false)
+      :set_win_option("winhl", "NormalFloat:Normal,FloatBorder:Function")
+      :set_border({ "╭", "─", "╮", "│", "╯", "─", "╰", "│" })
+      :set_pos(pos_col, pos_row)
+      :set_z_index(100)
+      :set_dimensions(width, height)
+      :render()
+
+  local canvas = Canvas:new(window)
+
+  local button_style = Style
+      :new()
+      :set_width(12)
+      :margin_top(3)
+      :align_horizontal(Style.position.Center)
+      :border()
+
+  local prompt_text = Style
+      :new()
+      :set_width(width)
+      :align_horizontal(Style.position.Center)
+      :margin_top(1)
+      :render("Apply 12 changes across 3 files?")
+
+  local cancel_button = button_style:render("cancel")
+  local ok_button = button_style:add_highlight("Function"):render("ok")
+
+  local buttons = Style.join.horizontal({ ok_button, cancel_button })
+  local ui = Style.join.vertical({ prompt_text, buttons }, Style.position.Center)
+
+  canvas:write(ui)
+
+  canvas:render_new()
+
 end
 
 return SearchProvider

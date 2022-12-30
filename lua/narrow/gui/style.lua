@@ -3,12 +3,12 @@ local TextBlock = require("narrow.gui.text_block")
 local Style = {
   -- modules and constants/enums
   join = {},
-  align = {
-    horizontal = {
+  position = {
       Left = 0,
       Center = 1,
       Right = 2,
-    }
+      Top = 3,
+      Bottom = 4,
   }
 }
 
@@ -48,6 +48,11 @@ end
 
 function Style:margin_left(n)
   self.margin.left = n
+  return self
+end
+
+function Style:margin_top(n)
+  self.margin.top = n
   return self
 end
 
@@ -98,14 +103,16 @@ end
 function Style:_apply_horizontal_alignment(text_block)
   local align_type = self.horizontal_align
   if not align_type then
-    align_type = Style.align.horizontal.Left
+    align_type = Style.position.Left
   end
 
   local padding_pos
-  if align_type == Style.align.horizontal.Right then
+  if align_type == Style.position.Right then
     padding_pos = TextBlock.padding.position.Front
-  elseif align_type == Style.align.horizontal.left then
+  elseif align_type == Style.position.Left then
     padding_pos = TextBlock.padding.position.Back
+  elseif align_type == Style.position.Center then
+    padding_pos = TextBlock.padding.position.Around
   end
 
   text_block:apply_width(self.width, padding_pos)
@@ -122,6 +129,11 @@ function Style:apply_margin(text_block)
   if self.margin.right then
     local right_block = TextBlock:new():apply_height(rows):apply_width(self.margin.right)
     text_block = Style.join.horizontal({ text_block, right_block })
+  end
+
+  if self.margin.top then
+    local top_block = TextBlock:new():apply_height(self.margin.top)
+    text_block = Style.join.vertical({ top_block, text_block })
   end
 
   return text_block
@@ -210,12 +222,17 @@ Style.join.horizontal = function(text_blocks)
   return new_text_block
 end
 
-Style.join.vertical = function(text_blocks)
+Style.join.vertical = function(text_blocks, alignment_pos)
   local new_text_block = TextBlock:new()
   for _, text_block in ipairs(text_blocks) do
     for _, line in ipairs(text_block) do
       table.insert(new_text_block, line)
     end
+  end
+
+  -- make sure each line has the same width now
+  if alignment_pos == Style.position.Center then
+    new_text_block:apply_width(nil, TextBlock.padding.position.Around)
   end
 
   return new_text_block

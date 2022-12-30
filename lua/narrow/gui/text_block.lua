@@ -8,6 +8,7 @@ local TextBlock = {
     position = {
       Front = 0,
       Back = 1,
+      Around = 2,
     }
   }
 }
@@ -70,10 +71,30 @@ function TextBlock:apply_width(width, padding_pos)
   for _, line in ipairs(self) do
     local line_width = vim.fn.strdisplaywidth(line.text)
     if line_width < width then
+      local offset = 0
       if padding_pos == TextBlock.padding.position.Back then
-        line.text = line.text .. string.rep(" ", width - line_width)
-      else
-        line.text = string.rep(" ", width - line_width) .. line.text
+        line.text = table.concat({ line.text, string.rep(" ", width - line_width) })
+      elseif padding_pos == TextBlock.padding.position.Front then
+        local num_spaces = width - line_width
+        offset = num_spaces
+        line.text = table.concat({ string.rep(" ", num_spaces), line.text })
+      elseif padding_pos == TextBlock.padding.position.Around then
+        local num_spaces = math.floor((width - line_width) * .5)
+        local spaces = string.rep(" ", num_spaces)
+        offset = num_spaces
+        line.text = table.concat({ spaces, line.text, spaces })
+      end
+
+      -- shift hl and state
+      if offset > 0 then
+        for _, hl in ipairs(line.highlights) do
+          hl.pos.col_start = hl.pos.col_start + offset
+          hl.pos.col_end = hl.pos.col_end + offset
+        end
+        for _, state in ipairs(line.states) do
+          state.pos.col_start = state.pos.col_start + offset
+          state.pos.col_end = state.pos.col_end + offset
+        end
       end
     end
   end

@@ -46,10 +46,20 @@ function NarrowEditor:new(config)
   new_obj:_init_provider(config)
 
   new_obj.store:dispatch({ type = "init_store" })
+
+  vim.on_key(function(key)
+    self.store:dispatch({
+      type = "key_pressed",
+      payload = key
+    })
+  end, self.namespace_id)
+
   return new_obj
 end
 
 function NarrowEditor:drop()
+  vim.on_key(nil, self.namespace_id)
+
   self.entry_header_window:drop()
   self.entry_header_window = nil
 
