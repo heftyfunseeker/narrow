@@ -57,6 +57,23 @@ M.array.shallow_copy = function(source)
   return copy
 end
 
+local function _clone(source, target)
+  for k, v in pairs(source) do
+    if type(v) == "table" then
+      target[k] = {}
+      _clone(v, target[k])
+    else
+      target[k] = v
+    end
+  end
+end
+
+M.array.clone = function(source)
+  local target = {}
+  _clone(source, target)
+  return target
+end
+
 M.hl_string = function(str, ft)
   --@todo use this to check for parser availability
   -- local _, ts_parsers = pcall(require, "nvim-treesitter.parsers")

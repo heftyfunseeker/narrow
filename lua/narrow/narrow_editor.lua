@@ -48,11 +48,11 @@ function NarrowEditor:new(config)
   new_obj.store:dispatch({ type = "init_store" })
 
   vim.on_key(function(key)
-    self.store:dispatch({
+    new_obj.store:dispatch({
       type = "key_pressed",
       payload = key
     })
-  end, self.namespace_id)
+  end, new_obj.namespace_id)
 
   return new_obj
 end

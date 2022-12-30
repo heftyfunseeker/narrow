@@ -13,6 +13,7 @@ SearchProvider.__index = SearchProvider
 -- ProviderInterface
 function SearchProvider:new(editor_context)
   local this = Utils.array.shallow_copy(editor_context)
+  this.button_id = 1
 
   this.store:subscribe(function()
     this:on_store_updated()
@@ -36,7 +37,9 @@ function SearchProvider:handle_action(state, action)
         query = nil,
         completed_queries = {},
         rg_messages = {},
-        enable_regex = false
+        enable_regex = false,
+        key_pressed = nil,
+        key_pressed_dirty = false,
       }
     end,
 
@@ -90,9 +93,10 @@ function SearchProvider:handle_action(state, action)
       return new_state
     end,
 
-    key_pressed = function(key)
+    key_pressed = function(key_pressed)
       local new_state = Utils.array.shallow_copy(state)
-      new_state.key_pressed = key
+      new_state.key_pressed = key_pressed
+      new_state.key_pressed_dirty = not new_state.key_pressed_dirty
 
       return new_state
     end
@@ -123,8 +127,11 @@ function SearchProvider:on_store_updated()
     self.prev_query = query
     self:search(query)
     self:_render_query(query)
-  else
-    self:render_rg_messages()
+  end
+
+  if state.key_pressed_dirty ~= self.key_pressed_dirty then
+    self.key_pressed_dirty = state.key_pressed_dirty
+    self:on_key_pressed(state.key_pressed)
   end
 
   self:render_hud()
@@ -348,10 +355,6 @@ end
 -- should we iterate through open file that were modified and `:e!` to reload them?
 -- Maybe we have this as a settings for users to configure?
 function SearchProvider:update_real_file()
-  if true then
-    self:show_confirmation_window()
-  end
-
   -- the lines we set initially from the canvas
   local original_lines = self.results_canvas.window:get_lines()
   -- the lines that are currently visible on screen
@@ -374,21 +377,22 @@ function SearchProvider:update_real_file()
       table.insert(changes, { path = rg_message.data.path.text, row = rg_message.data.line_number, text = line })
     end
   end
+  local prompt_text = "Are you sure you want to change " .. #changes .. " lines?"
 
-  -- -- todo pop-up confirmation modal instead
-  print("narrow: Applying " .. #changes .. " changes to real files")
-
-  -- TODO: batch these changes by header to avoid the io thrashing
-  for _, change in ipairs(changes) do
-    local file_lines = Utils.string_to_lines(Utils.read_file_sync(change.path))
-    file_lines[change.row] = change.text
-    Utils.write_file_sync(change.path, table.concat(file_lines, "\n"))
-  end
-
-  print("narrow: Finished applying " .. #changes .. " changes")
+  self:show_confirmation_window(prompt_text, function()
+    -- TODO: batch these changes by header to avoid the io thrashing
+    for _, change in ipairs(changes) do
+      local file_lines = Utils.string_to_lines(Utils.read_file_sync(change.path))
+      file_lines[change.row] = change.text
+      Utils.write_file_sync(change.path, table.concat(file_lines, "\n"))
+    end
+  end)
 end
 
-function SearchProvider:show_confirmation_window()
+function SearchProvider:show_confirmation_window(prompt_text, on_confirm_cb)
+  self.on_confirm_cb = on_confirm_cb
+  self.prompt_text = prompt_text
+
   local columns = api.nvim_get_option("columns")
   local lines = api.nvim_get_option("lines")
 
@@ -401,6 +405,7 @@ function SearchProvider:show_confirmation_window()
       :new()
       :set_buf_option("bufhidden", "wipe")
       :set_buf_option("buftype", "nofile")
+      -- :set_buf_option("modifiable", false)
       :set_buf_option("swapfile", false)
       :set_win_option("wrap", false)
       :set_win_option("winhl", "NormalFloat:Normal,FloatBorder:Function")
@@ -411,6 +416,15 @@ function SearchProvider:show_confirmation_window()
       :render()
 
   local canvas = Canvas:new(window)
+  self.confirmation_canvas = canvas
+
+  self:render_confirmation_prompt()
+end
+
+function SearchProvider:render_confirmation_prompt()
+  self.confirmation_canvas:clear()
+
+  local width, _ = self.confirmation_canvas:get_dimensions()
 
   local button_style = Style
       :new()
@@ -419,23 +433,53 @@ function SearchProvider:show_confirmation_window()
       :align_horizontal(Style.position.Center)
       :border()
 
+  local selected_button_style = button_style
+      :clone()
+      :add_highlight("Function")
+
   local prompt_text = Style
       :new()
       :set_width(width)
       :align_horizontal(Style.position.Center)
       :margin_top(1)
-      :render("Apply 12 changes across 3 files?")
+      :render(self.prompt_text)
 
-  local cancel_button = button_style:render("cancel")
-  local ok_button = button_style:add_highlight("Function"):render("ok")
+  local ok_style = button_style
+  local cancel_style = button_style
+
+  if self.button_id == 1 then
+    ok_style = selected_button_style
+  else
+    cancel_style = selected_button_style
+  end
+
+  local ok_button = ok_style:render("ok")
+  local cancel_button = cancel_style:render("cancel")
 
   local buttons = Style.join.horizontal({ ok_button, cancel_button })
   local ui = Style.join.vertical({ prompt_text, buttons }, Style.position.Center)
 
-  canvas:write(ui)
+  self.confirmation_canvas:write(ui)
+  self.confirmation_canvas:render_new()
+end
 
-  canvas:render_new()
+function SearchProvider:on_key_pressed(key)
+  if self.confirmation_canvas == nil then return end
 
+  if key == "\t" then
+    self.button_id = (self.button_id + 1) % 2
+    self:render_confirmation_prompt()
+  elseif key == "\r" then
+    if self.button_id == 1 then
+      self.on_confirm_cb()
+    end
+
+    self.on_confirm_cb = nil
+    self.prompt_text = nil
+
+    self.confirmation_canvas:drop()
+    self.confirmation_canvas = nil
+  end
 end
 
 return SearchProvider

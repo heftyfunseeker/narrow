@@ -75,4 +75,10 @@ function Canvas:get_dimensions()
   return self.window:get_dimensions()
 end
 
+function Canvas:drop()
+  self.window:drop()
+  self.window = nil
+  self:clear()
+end
+
 return Canvas

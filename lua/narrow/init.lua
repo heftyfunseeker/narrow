@@ -28,6 +28,8 @@ M.setup = function(_config)
 end
 
 M.search_project = function()
+  if narrow_editor then M.close() end
+
   init_narrow()
 
   local NarrowEditor = require("narrow.narrow_editor")
@@ -39,6 +41,8 @@ M.search_project = function()
 end
 
 M.search_current_file = function()
+  if narrow_editor then M.close() end
+
   local current_file = vim.api.nvim_buf_get_name(0)
 
   init_narrow()

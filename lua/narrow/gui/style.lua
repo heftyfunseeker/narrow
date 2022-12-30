@@ -1,4 +1,6 @@
 local TextBlock = require("narrow.gui.text_block")
+local Utils = require("narrow.narrow_utils")
+
 
 local Style = {
   -- modules and constants/enums
@@ -29,6 +31,10 @@ function Style:new()
     highlights = {},
   }
   return setmetatable(new_obj, self)
+end
+
+function Style:clone()
+  return setmetatable(Utils.array.clone(self), Style)
 end
 
 function Style:set_width(width)
