@@ -1,4 +1,4 @@
-local narrow_utils = require("narrow.narrow_utils")
+local Utils = require("narrow.narrow_utils")
 local Window = require("narrow.window")
 local Layout = require("narrow.gui.layout")
 local Canvas = require("narrow.gui.canvas")
@@ -47,19 +47,10 @@ function NarrowEditor:new(config)
 
   new_obj.store:dispatch({ type = "init_store" })
 
-  vim.on_key(function(key)
-    new_obj.store:dispatch({
-      type = "key_pressed",
-      payload = key
-    })
-  end, new_obj.namespace_id)
-
   return new_obj
 end
 
 function NarrowEditor:drop()
-  vim.on_key(nil, self.namespace_id)
-
   self.entry_header_window:drop()
   self.entry_header_window = nil
 
@@ -148,70 +139,26 @@ function NarrowEditor:_build_layout(config)
   api.nvim_command("startinsert")
 end
 
--- should we instead expose se.get_results_buf()?
 function NarrowEditor:_set_keymaps(config)
-  api.nvim_buf_set_keymap(
-    self.input_window.buf,
-    "n",
-    "<ESC>",
-    ':lua require("narrow").close() <CR>',
-    { nowait = true, noremap = true, silent = true }
-  )
-  api.nvim_buf_set_keymap(
-    self.input_window.buf,
-    "n",
-    "<CR>",
-    ':lua require("narrow").set_focus_results_window() <CR>',
-    { nowait = true, noremap = true, silent = true }
-  )
+  local opts = { nowait = true, noremap = true, silent = true }
+
+  api.nvim_set_keymap("n", "<Tab>", ':lua require("narrow").action("action_ui_next") <CR>', opts)
+  api.nvim_set_keymap("n", "<S-Tab>", ':lua require("narrow").action("action_ui_prev") <CR>', opts)
+  api.nvim_set_keymap("n", "<CR>", ':lua require("narrow").action("action_ui_confirm") <CR>', opts)
+  api.nvim_set_keymap("n", "<Esc>", ':nohlsearch <Bar> :lua require("narrow").action("action_ui_back") <CR>', opts)
   api.nvim_buf_set_keymap(
     self.input_window.buf,
     "n",
     "j",
-    ':lua require("narrow").set_focus_results_window() <CR>',
+    ':lua require("narrow").action("action_ui_focus_results") <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(self.input_window.buf, "i", "<CR>", "", { nowait = true, noremap = false, silent = true })
   api.nvim_buf_set_keymap(
     self.results_window.buf,
     "n",
-    "<C-g>",
-    ':lua require("narrow").set_focus_input_window() <CR>',
-    { nowait = true, noremap = true, silent = true }
-  )
-  api.nvim_buf_set_keymap(
-    self.results_window.buf,
-    "n",
-    "<CR>",
-    ':lua require("narrow").select() <CR>',
-    { nowait = true, noremap = true, silent = true }
-  )
-  api.nvim_buf_set_keymap(
-    self.results_window.buf,
-    "n",
     "<C-w>",
     ':lua require("narrow").update_real_file() <CR>',
-    { nowait = true, noremap = true, silent = true }
-  )
-  api.nvim_buf_set_keymap(
-    self.input_window.buf,
-    "n",
-    "<C-r>",
-    ':lua require("narrow").toggle_regex() <CR>',
-    { nowait = true, noremap = true, silent = true }
-  )
-  api.nvim_buf_set_keymap(
-    self.input_window.buf,
-    "n",
-    "{",
-    ':lua require("narrow").prev_query() <CR>',
-    { nowait = true, noremap = true, silent = true }
-  )
-  api.nvim_buf_set_keymap(
-    self.input_window.buf,
-    "n",
-    "}",
-    ':lua require("narrow").next_query() <CR>',
     { nowait = true, noremap = true, silent = true }
   )
 end
@@ -256,12 +203,12 @@ function NarrowEditor:_get_query_from_input_window()
 end
 
 function NarrowEditor:on_cursor_moved()
-  if not self.provider then return end
-
-  self.provider:on_cursor_moved()
+  -- self.store:dispatch({ type = "cursor_moved" })
 end
 
 function NarrowEditor:on_cursor_moved_insert()
+  self.store:dispatch({ type = "cursor_moved_insert" })
+
   local curr_win = api.nvim_get_current_win()
 
   if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
@@ -280,12 +227,20 @@ function NarrowEditor:on_cursor_moved_insert()
   })
 end
 
+function NarrowEditor:on_insert_enter()
+  self.store:dispatch({
+    type = "insert_enter",
+  })
+end
+
 function NarrowEditor:on_insert_leave()
+  -- @Todo: move this to search provided
   local curr_win = api.nvim_get_current_win()
 
   if curr_win ~= self.input_window.win then
     return
   end
+  --------------------------------------
 
   self.store:dispatch({
     type = "input_insert_leave",
@@ -294,18 +249,6 @@ end
 
 function NarrowEditor:on_selected()
   return self.provider:on_selected()
-end
-
-function NarrowEditor:set_focus_results_window()
-  api.nvim_set_current_win(self.results_window.win)
-end
-
-function NarrowEditor:set_focus_input_window()
-  api.nvim_set_current_win(self.input_window.win)
-end
-
-function NarrowEditor:update_real_file()
-  self.provider:update_real_file()
 end
 
 return NarrowEditor

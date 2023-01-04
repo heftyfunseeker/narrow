@@ -38,6 +38,17 @@ M.get_file_extension = function(file_path)
   end
 end
 
+M.find_mappings = function(mode, lhs)
+  local ret = {}
+  local mappings = vim.api.nvim_get_keymap(mode)
+  for _, mapping in ipairs(mappings) do
+    if mapping.lhs == lhs then
+      table.insert(ret, mapping)
+    end
+  end
+  return ret
+end
+
 -- @ret index of element, -1 if not found
 M.array.index_of = function(array, target)
   for i, curr in ipairs(array) do

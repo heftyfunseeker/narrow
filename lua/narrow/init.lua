@@ -3,14 +3,19 @@ local narrow_editor = nil
 
 local M = {}
 
-function init_narrow()
+M.setup = function(_config)
+  -- todo
+end
+
+-- @TODO: should we move this into the narrow_editor?
+local function init_narrow()
   -- @todo: allow theming with colors
   -- api.nvim_set_hl(0, "NarrowMatch", { fg = "Red", bold = true })
   --
   api.nvim_command("hi def link NarrowHeader Function")
   api.nvim_command("hi def link NarrowMatch Keyword")
-  api.nvim_command("hi def link HUD Error")
-  api.nvim_command("hi def link Query Todo")
+  api.nvim_command("hi def link NarrowHudHUD Error")
+  api.nvim_command("hi def link NarrowQuery Todo")
 
   vim.cmd([[
     augroup narrow
@@ -19,12 +24,9 @@ function init_narrow()
       au CursorMoved * :lua require("narrow")._on_cursor_moved() 
       au CursorMovedI * :lua require("narrow")._on_cursor_moved_insert() 
       au InsertLeave * :lua require("narrow")._on_insert_leave() 
+      au InsertEnter * :lua require("narrow")._on_insert_enter() 
     augroup END
   ]])
-end
-
-M.setup = function(_config)
-  -- no impl
 end
 
 M.search_project = function()
@@ -64,51 +66,12 @@ M.close = function()
   narrow_editor = nil
 end
 
-M.select = function()
+M.action = function(action_id)
   if not narrow_editor then return end
 
-  if narrow_editor:on_selected() then
-    M.close()
-  end
+  narrow_editor:get_store():dispatch({ type = "action", payload = action_id })
 end
 
-M.update_real_file = function()
-  if not narrow_editor then return end
-
-  narrow_editor:update_real_file()
-end
-
-M.set_focus_results_window = function()
-  if not narrow_editor then return end
-
-  narrow_editor:set_focus_results_window()
-end
-
-M.set_focus_input_window = function()
-  if not narrow_editor then return end
-
-  narrow_editor:set_focus_input_window()
-end
-
-M.toggle_regex = function()
-  if not narrow_editor then return end
-
-  narrow_editor:get_store():dispatch({ type = "toggle_regex" })
-end
-
-M.prev_query = function()
-  if not narrow_editor then return end
-
-  narrow_editor:get_store():dispatch({ type = "prev_query" })
-end
-
-M.next_query = function()
-  if not narrow_editor then return end
-
-  narrow_editor:get_store():dispatch({ type = "next_query" })
-end
-
--- TODO these should be private
 M._resize = function()
   if not narrow_editor then return end
 
@@ -132,6 +95,14 @@ M._on_cursor_moved_insert = function()
 end
 
 M._on_insert_leave = function()
+  local a = vim.schedule_wrap(function()
+    if not narrow_editor then return end
+    narrow_editor:on_insert_leave()
+  end)
+  a()
+end
+
+M._on_insert_enter = function()
   local a = vim.schedule_wrap(function()
     if not narrow_editor then return end
     narrow_editor:on_insert_leave()

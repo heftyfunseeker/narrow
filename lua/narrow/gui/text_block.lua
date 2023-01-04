@@ -133,7 +133,7 @@ function TextBlock:apply_highlight(hl_name, opts)
 
   for row, line in ipairs(self) do
     local col_end = opts.col_end
-    if not col_end then col_end = #line.text end
+    if not col_end then col_end = col_start + #line.text end
     table.insert(line.highlights, make_hl(hl_name, row, col_start, col_end))
   end
 end

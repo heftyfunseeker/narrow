@@ -3,9 +3,24 @@ local Devicons = require("nvim-web-devicons")
 local TextBlock = require("narrow.gui.text_block")
 local Style = require("narrow.gui.style")
 local Canvas = require("narrow.gui.canvas")
-local Window = require("narrow.window")
+local Window = require("narrow.window") local Toggle = require("narrow.gui.components.toggle")
 
 local api = vim.api
+
+local hud_button_ids = {
+  prev_search = 0,
+  next_search = 1,
+  toggle_regex = 2,
+  toggle_case = 3,
+  toggle_word = 4,
+  COUNT = 5
+}
+
+local confirmation_button_ids = {
+  cancel = 0,
+  confirm = 1,
+  COUNT = 2
+}
 
 local SearchProvider = {}
 SearchProvider.__index = SearchProvider
@@ -13,7 +28,20 @@ SearchProvider.__index = SearchProvider
 -- ProviderInterface
 function SearchProvider:new(editor_context)
   local this = Utils.array.shallow_copy(editor_context)
-  this.button_id = 1
+
+  this.confirmation_button_id = confirmation_button_ids.cancel
+  this.hud_button_id = -1
+
+  this.on_toggled = {}
+  this.on_toggled[hud_button_ids.toggle_regex] = function()
+    this.store:dispatch({ type = "toggle_regex" })
+  end
+  this.on_toggled[hud_button_ids.toggle_word] = function()
+    this.store:dispatch({ type = "toggle_word" })
+  end
+  this.on_toggled[hud_button_ids.toggle_case] = function()
+    this.store:dispatch({ type = "toggle_case" })
+  end
 
   this.store:subscribe(function()
     this:on_store_updated()
@@ -35,28 +63,63 @@ function SearchProvider:handle_action(state, action)
     init_store = function(_)
       return {
         query = nil,
+        query_dirty = nil,
         completed_queries = {},
+
         rg_messages = {},
-        enable_regex = false,
-        key_pressed = nil,
-        key_pressed_dirty = false,
+        rg_regex_enabled = false,
+        rg_word_enabled = false,
+        rg_case_enabled = false,
+
+        action_id = nil,
+        action_dirty = false,
       }
     end,
 
     toggle_regex = function(_)
       local new_state = Utils.array.shallow_copy(state)
-      new_state.enable_regex = not new_state.enable_regex
+      new_state.rg_regex_enabled = not new_state.rg_regex_enabled
+      new_state.query_dirty = not new_state.query_dirty
+      return new_state
+    end,
+
+    toggle_word = function(_)
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.rg_word_enabled = not new_state.rg_word_enabled
+      new_state.query_dirty = not new_state.query_dirty
+      return new_state
+    end,
+
+    toggle_case = function(_)
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.rg_case_enabled = not new_state.rg_case_enabled
+      new_state.query_dirty = not new_state.query_dirty
       return new_state
     end,
 
     query_updated = function(query)
       local new_state = Utils.array.shallow_copy(state)
       new_state.query = query
+      new_state.query_dirty = not new_state.query_dirty
 
       -- clear previous results if we nuke the query line
       if #query < 2 then
         new_state.rg_messages = {}
       end
+
+      return new_state
+    end,
+
+    cursor_moved_insert = function()
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.cursor_moved_insert = not new_state.cursor_moved_insert
+
+      return new_state
+    end,
+
+    insert_enter = function()
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.insert_enter = not new_state.insert_enter
 
       return new_state
     end,
@@ -79,6 +142,7 @@ function SearchProvider:handle_action(state, action)
       local new_state = Utils.array.shallow_copy(state)
       local query = table.remove(new_state.completed_queries)
       new_state.query = query
+      new_state.query_dirty = not new_state.query_dirty
       table.insert(new_state.completed_queries, 1, query)
 
       return new_state
@@ -88,15 +152,16 @@ function SearchProvider:handle_action(state, action)
       local new_state = Utils.array.shallow_copy(state)
       local query = table.remove(new_state.completed_queries, 1)
       new_state.query = query
+      new_state.query_dirty = not new_state.query_dirty
       table.insert(new_state.completed_queries, query)
 
       return new_state
     end,
 
-    key_pressed = function(key_pressed)
+    action = function(action_id)
       local new_state = Utils.array.shallow_copy(state)
-      new_state.key_pressed = key_pressed
-      new_state.key_pressed_dirty = not new_state.key_pressed_dirty
+      new_state.action_id = action_id
+      new_state.action_dirty = not new_state.action_dirty
 
       return new_state
     end
@@ -117,49 +182,32 @@ end
 function SearchProvider:on_store_updated()
   local state = self.store:get_state()
 
-  local query = self.store:get_state().query
+  local query = state.query
   local results_updated = self.prev_rg_messages ~= state.rg_messages
+
+  if state.insert_enter ~= self.insert_enter then
+    self.insert_enter = state.insert_enter
+    self.hud_button_id = -1
+    self:render_hud()
+  end
 
   if results_updated then
     self.prev_rg_messages = state.rg_messages
     self:render_rg_messages()
-  elseif query ~= nil and #query >= 2 and self.prev_query ~= query then
+  elseif state.query_dirty ~= self.query_dirty then
+    self.query_dirty = state.query_dirty
     self.prev_query = query
-    self:search(query)
-    self:_render_query(query)
+
+    if #query >= 2 then
+      self:search(query)
+      self:_render_query(query)
+    end
   end
 
-  if state.key_pressed_dirty ~= self.key_pressed_dirty then
-    self.key_pressed_dirty = state.key_pressed_dirty
-    self:on_key_pressed(state.key_pressed)
+  if state.action_dirty ~= self.action_dirty then
+    self.action_dirty = state.action_dirty
+    self:_handle_action(state.action_id)
   end
-
-  self:render_hud()
-end
-
-function SearchProvider:on_selected()
-  local cursor = self.results_canvas.window:get_cursor_location()
-  local row = cursor[1]
-  local col = cursor[2]
-
-  local rg_message = self.results_canvas:get_state(row, col)
-  if not rg_message or not rg_message.data then return false end
-
-  local submatches = rg_message.data.submatches
-  if not submatches then return false end
-
-  api.nvim_set_current_win(self.prev_win)
-  api.nvim_command("edit " .. rg_message.data.path.text)
-  for _, match in ipairs(submatches) do
-    api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
-    return true
-  end
-
-  return false
-end
-
-function SearchProvider:on_cursor_moved()
-  self:render_hud()
 end
 
 function SearchProvider:on_resized()
@@ -169,10 +217,21 @@ end
 function SearchProvider:build_rg_args(query_term)
   local args = { query_term, "--smart-case", "--json" }
 
-  if self.config and not self.store:get_state().enable_regex then
+  local state = self.store:get_state()
+
+  if not state.rg_regex_enabled then
     table.insert(args, "--fixed-strings")
   end
 
+  if state.rg_word_enabled then
+    table.insert(args, "--word-regexp")
+  end
+
+  if state.rg_case_enabled then
+    table.insert(args, "--case-sensitive")
+  end
+
+  --@todo: move this to state
   if self.config and self.config.search.mode == 1 then
     table.insert(args, self.config.search.current_file)
   end
@@ -304,50 +363,51 @@ function SearchProvider:render_rg_messages()
 
   api.nvim_win_set_cursor(self.results_canvas.window.win, { 1, 0 })
   api.nvim_win_set_cursor(self.header_canvas.window.win, { 1, 0 })
-  -- self:render_hud()
+
+  self:render_hud()
 end
 
 function SearchProvider:render_hud()
   self.hud_canvas:clear()
 
+  local state = self.store:get_state()
+
   local input_width, _ = self.input_canvas:get_dimensions()
-  -- local namespace_id = self.entry_result_namespace_id
-  --
-  -- local entry = self.results_canvas:get_entry_at_cursor(namespace_id)
-  -- if entry == nil then
-  --   namespace_id = self.entry_header_namespace_id
-  --   entry = self.results_canvas:get_entry_at_cursor(namespace_id)
-  -- end
-  --
-  -- -- results
-  -- if entry ~= nil then
-  --   local entry_index = entry[1] -- id is the index in namespace
-  --   local entries = self.results_canvas:get_all_entries(namespace_id)
-  --   local input_width, _ = self.input_canvas:get_dimensions()
-  --
-  --   Text
-  --       :new()
-  --       :set_text(string.format("%d/%d  ", entry_index, #entries))
-  --       --:apply_style({ type = Style.Types.virtual_text, hl_name = "Comment", pos_type = "overlay" })
-  --       :set_alignment(Text.AlignmentType.right)
-  --       :set_dimensions(8, 1)
-  --       :set_pos(input_width - 8, 0)
-  --       :render(self.input_canvas)
-  -- end
-  local line = Style.join.horizontal({
-    Style
-        :new()
-        :margin_left(input_width + 3)
-        :border()
-        :add_highlight("@text.title")
-        :render(" < "),
-    Style
-        :new()
-        :border()
-        :add_highlight("Function")
-        :render(" > "),
+
+  local prev_button_style = Style
+      :new()
+      :add_highlight("Comment")
+      :border_highlight("Comment")
+      :margin_left(input_width + 3)
+      :border()
+  local next_button_style = prev_button_style:clone():margin_left(nil)
+
+  -- @todo: move current button into state
+  local regex_toggle = Toggle:new("regex", state.rg_regex_enabled, self.hud_button_id == hud_button_ids.toggle_regex)
+  local case_toggle = Toggle:new("case", state.rg_case_enabled, self.hud_button_id == hud_button_ids.toggle_case)
+  local word_toggle = Toggle:new("word", state.rg_word_enabled, self.hud_button_id == hud_button_ids.toggle_word)
+
+  if self.hud_button_id == hud_button_ids.prev_search then
+    prev_button_style:border_highlight("Function"):add_highlight("Function")
+  elseif self.hud_button_id == hud_button_ids.next_search then
+    next_button_style:border_highlight("Function"):add_highlight("Function")
+  end
+
+  local container_style = Style:new():border():border_highlight("Comment")
+
+  local search_settings_buttons = container_style:render(Style.join.horizontal({
+    Style:new():margin_right(2):margin_left(1):render(regex_toggle),
+    Style:new():margin_right(2):render(case_toggle),
+    Style:new():margin_right(2):render(word_toggle),
+  }))
+
+  local hud_buttons = Style.join.horizontal({
+    prev_button_style:render(" ⬅ "),
+    next_button_style:render(" ➡ "),
+    search_settings_buttons
   })
-  self.hud_canvas:write(line)
+
+  self.hud_canvas:write(hud_buttons)
   self.hud_canvas:render_new()
 end
 
@@ -405,7 +465,6 @@ function SearchProvider:show_confirmation_window(prompt_text, on_confirm_cb)
       :new()
       :set_buf_option("bufhidden", "wipe")
       :set_buf_option("buftype", "nofile")
-      -- :set_buf_option("modifiable", false)
       :set_buf_option("swapfile", false)
       :set_win_option("wrap", false)
       :set_win_option("winhl", "NormalFloat:Normal,FloatBorder:Function")
@@ -435,7 +494,10 @@ function SearchProvider:render_confirmation_prompt()
 
   local selected_button_style = button_style
       :clone()
+      :padding_right(1)
+      :padding_left(1)
       :add_highlight("Function")
+      :border_highlight("Function")
 
   local prompt_text = Style
       :new()
@@ -447,31 +509,76 @@ function SearchProvider:render_confirmation_prompt()
   local ok_style = button_style
   local cancel_style = button_style
 
-  if self.button_id == 1 then
+  if self.confirmation_button_id == confirmation_button_ids.confirm then
     ok_style = selected_button_style
+    cancel_style:margin_right(1)
   else
     cancel_style = selected_button_style
+    ok_style:margin_left(1)
   end
 
   local ok_button = ok_style:render("ok")
   local cancel_button = cancel_style:render("cancel")
 
-  local buttons = Style.join.horizontal({ ok_button, cancel_button })
+  local buttons = Style.join.horizontal({ ok_button, Style:new():render("  "), cancel_button })
   local ui = Style.join.vertical({ prompt_text, buttons }, Style.position.Center)
 
   self.confirmation_canvas:write(ui)
-  self.confirmation_canvas:render_new()
+  self.confirmation_canvas:render_new(true)
 end
 
-function SearchProvider:on_key_pressed(key)
-  if self.confirmation_canvas == nil then return end
+function SearchProvider:_handle_action(action_id)
+  if self.confirmation_canvas then
+    self:_confirmation_handle_action(action_id)
+  else
+    self:_hud_handle_action(action_id)
+  end
+end
 
-  if key == "\t" then
-    self.button_id = (self.button_id + 1) % 2
+function SearchProvider:_hud_handle_action(action_id)
+  if action_id == "action_ui_next" then
+    if self.input_canvas:has_focus() then
+      self.hud_button_id = (self.hud_button_id + 1) % hud_button_ids.COUNT
+      self:render_hud()
+    end
+  elseif action_id == "action_ui_prev" then
+    if self.input_canvas:has_focus() then
+      self.hud_button_id = (self.hud_button_id - 1) % hud_button_ids.COUNT
+      self:render_hud()
+    end
+  elseif action_id == "action_ui_back" then
+    if self.results_canvas:has_focus() then
+      self.input_canvas:set_focus()
+    elseif self.hud_button_id ~= -1 then
+      self.hud_button_id = -1
+      self:render_hud()
+    else
+      require("narrow").close()
+    end
+  elseif action_id == "action_ui_confirm" then
+    if self.results_canvas:has_focus() then
+      self:open_result()
+    elseif self.input_canvas:has_focus() then
+      if self.hud_button_id then
+        self.on_toggled[self.hud_button_id]()
+      end
+    end
+  elseif action_id == "action_ui_focus_results" then
+    self.results_canvas:set_focus()
+  elseif action_id == "action_ui_focus_input" then
+    self.input_canvas:set_focus()
+  end
+end
+
+function SearchProvider:_confirmation_handle_action(action_id)
+  if action_id == "action_ui_next" then
+    self.confirmation_button_id = (self.confirmation_button_id + 1) % confirmation_button_ids.COUNT
     self:render_confirmation_prompt()
-  elseif key == "\r" then
-    if self.button_id == 1 then
+  elseif action_id == "action_ui_confirm" then
+    if self.confirmation_button_id == confirmation_button_ids.confirm then
       self.on_confirm_cb()
+      -- refresh our results
+      self.store:dispatch({ type = "query_updated", payload = self.prev_query })
     end
 
     self.on_confirm_cb = nil
@@ -479,6 +586,26 @@ function SearchProvider:on_key_pressed(key)
 
     self.confirmation_canvas:drop()
     self.confirmation_canvas = nil
+    self.confirmation_button_id = confirmation_button_ids.cancel
+  end
+end
+
+function SearchProvider:open_result()
+  local cursor = self.results_canvas.window:get_cursor_location()
+  local row = cursor[1]
+  local col = cursor[2]
+
+  local rg_message = self.results_canvas:get_state(row, col)
+  if not rg_message or not rg_message.data then return false end
+
+  local submatches = rg_message.data.submatches
+  if not submatches then return false end
+
+  api.nvim_set_current_win(self.prev_win)
+  api.nvim_command("edit " .. rg_message.data.path.text)
+  for _, match in ipairs(submatches) do
+    api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
+    require("narrow").close()
   end
 end
 

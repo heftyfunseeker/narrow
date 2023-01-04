@@ -34,7 +34,9 @@ function Canvas:write(text_block)
   end
 end
 
-function Canvas:render_new()
+function Canvas:render_new(lock_buffer_after_draw)
+  self.window:set_buf_option("modifiable", true)
+
   local window_lines = {}
   for _, line in ipairs(self.lines) do
     table.insert(window_lines, line.text)
@@ -46,6 +48,10 @@ function Canvas:render_new()
     for _, hl in ipairs(line.highlights) do
       self.window:add_highlight(hl.hl_name, hl.pos)
     end
+  end
+
+  if lock_buffer_after_draw then
+    self.window:set_buf_option("modifiable", false)
   end
 end
 
@@ -73,6 +79,14 @@ end
 
 function Canvas:get_dimensions()
   return self.window:get_dimensions()
+end
+
+function Canvas:has_focus()
+  return self.window:has_focus()
+end
+
+function Canvas:set_focus()
+  self.window:set_focus()
 end
 
 function Canvas:drop()

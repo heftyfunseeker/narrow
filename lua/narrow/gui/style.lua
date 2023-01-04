@@ -6,11 +6,11 @@ local Style = {
   -- modules and constants/enums
   join = {},
   position = {
-      Left = 0,
-      Center = 1,
-      Right = 2,
-      Top = 3,
-      Bottom = 4,
+    Left = 0,
+    Center = 1,
+    Right = 2,
+    Top = 3,
+    Bottom = 4,
   }
 }
 
@@ -26,9 +26,16 @@ function Style:new()
       top = nil,
       bottom = nil,
     },
+    padding = {
+      left = nil,
+      right = nil,
+      top = nil,
+      bottom = nil,
+    },
     horizontal_align = nil,
     has_border = false,
     highlights = {},
+    border_hl = nil,
   }
   return setmetatable(new_obj, self)
 end
@@ -47,6 +54,16 @@ function Style:set_height(height)
   return self
 end
 
+function Style:margin_top(n)
+  self.margin.top = n
+  return self
+end
+
+function Style:margin_bottom(n)
+  self.margin.bottom = n
+  return self
+end
+
 function Style:margin_right(n)
   self.margin.right = n
   return self
@@ -57,14 +74,34 @@ function Style:margin_left(n)
   return self
 end
 
-function Style:margin_top(n)
-  self.margin.top = n
+function Style:padding_top(n)
+  self.padding.top = n
+  return self
+end
+
+function Style:padding_bottom(n)
+  self.padding.bottom = n
+  return self
+end
+
+function Style:padding_right(n)
+  self.padding.right = n
+  return self
+end
+
+function Style:padding_left(n)
+  self.padding.left = n
   return self
 end
 
 function Style:add_highlight(hl_name, opts)
   if not opts then opts = {} end
   table.insert(self.highlights, { hl_name = hl_name, opts = opts })
+  return self
+end
+
+function Style:border_highlight(hl_name)
+  self.border_hl = hl_name
   return self
 end
 
@@ -78,9 +115,6 @@ function Style:align_horizontal(horizontal_align)
   return self
 end
 
--- 1. apply padding
--- 2. apply border
--- 3. appy margin
 function Style:render(text)
   local text_block = {}
   if type(text) == "string" then
@@ -100,6 +134,7 @@ function Style:render(text)
     text_block:apply_highlight(hl.hl_name, hl.opts)
   end
 
+  text_block = self:apply_padding(text_block)
   text_block = self:apply_border(text_block)
   text_block = self:apply_margin(text_block)
 
@@ -125,21 +160,46 @@ function Style:_apply_horizontal_alignment(text_block)
 end
 
 function Style:apply_margin(text_block)
+  return self:_apply_spacing_blocks(
+    text_block,
+    self.margin.top,
+    self.margin.bottom,
+    self.margin.left,
+    self.margin.right
+  )
+end
+
+function Style:apply_padding(text_block)
+  return self:_apply_spacing_blocks(
+    text_block,
+    self.padding.top,
+    self.padding.bottom,
+    self.padding.left,
+    self.padding.right
+  )
+end
+
+function Style:_apply_spacing_blocks(text_block, top, bottom, left, right)
   local rows = text_block:height()
-  if self.margin.left then
-    -- @todo: should we appy this technique for join.horizontal? Each block has max height (of the set) applied. And then local max width applied
-    local left_block = TextBlock:new():apply_height(rows):apply_width(self.margin.left)
+
+  if top and top > 0 then
+    local top_block = TextBlock:new():apply_height(top)
+    text_block = Style.join.vertical({ top_block, text_block })
+  end
+
+  if bottom and bottom > 0 then
+    local bottom_block = TextBlock:new():apply_height(bottom)
+    text_block = Style.join.vertical({ text_block, bottom_block })
+  end
+
+  if left and left > 0 then
+    local left_block = TextBlock:new():apply_height(rows):apply_width(left)
     text_block = Style.join.horizontal({ left_block, text_block })
   end
 
-  if self.margin.right then
-    local right_block = TextBlock:new():apply_height(rows):apply_width(self.margin.right)
+  if right and right > 0 then
+    local right_block = TextBlock:new():apply_height(rows):apply_width(right)
     text_block = Style.join.horizontal({ text_block, right_block })
-  end
-
-  if self.margin.top then
-    local top_block = TextBlock:new():apply_height(self.margin.top)
-    text_block = Style.join.vertical({ top_block, text_block })
   end
 
   return text_block
@@ -149,19 +209,25 @@ function Style:apply_border(text_block)
   if not self.has_border then return text_block end
 
   local width = text_block:width()
+
+  local border_style = Style:new()
+  if self.border_hl then
+    border_style:add_highlight(self.border_hl)
+  end
   -- local height = text_block:height()
 
-  local top = TextBlock:from_string("╭" .. string.rep("─", width) .. "╮")
-  local side = TextBlock:from_string("│")
+  local top = border_style:render("╭" .. string.rep("─", width) .. "╮")
+  local left = border_style:render("│")
+  local right = border_style:render("│")
   -- @todo: to handle the height, just build .. ie "\n|\n|" the string first before the block
 
   local bordered_block = {}
   table.insert(bordered_block, top)
 
-  local middle = Style.join.horizontal({ side, text_block, side })
+  local middle = Style.join.horizontal({ left, text_block, right })
   table.insert(bordered_block, middle)
 
-  local bottom = TextBlock:from_string("╰" .. string.rep("─", width) .. "╯")
+  local bottom = border_style:render("╰" .. string.rep("─", width) .. "╯")
   table.insert(bordered_block, bottom)
 
   return Style.join.vertical(bordered_block)

@@ -62,11 +62,21 @@ end
 
 function Window:set_buf_option(option_name, option_value)
   self.buf_options[option_name] = option_value
+
+  if self.buf then
+    api.nvim_buf_set_option(self.buf, option_name, option_value)
+  end
+
   return self
 end
 
 function Window:set_win_option(option_name, option_value)
   self.win_options[option_name] = option_value
+
+  if self.win then
+    api.nvim_win_set_option(self.win, option_name, option_value)
+  end
+
   return self
 end
 
@@ -163,6 +173,14 @@ end
 
 function Window:get_cursor_location()
   return api.nvim_win_get_cursor(self.win)
+end
+
+function Window:has_focus()
+  return api.nvim_get_current_win() == self.win
+end
+
+function Window:set_focus()
+  return api.nvim_set_current_win(self.win)
 end
 
 return Window
