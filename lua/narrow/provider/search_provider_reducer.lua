@@ -26,10 +26,11 @@ M.reduce = function(state, action)
     init_store = function(_)
       return {
         query = nil,
-        query_dirty = nil,
         completed_queries = {},
 
         rg_messages = {},
+        rg_search_summary = nil,
+
         rg_regex_enabled = false,
         rg_word_enabled = false,
         rg_case_enabled = false,
@@ -45,40 +46,30 @@ M.reduce = function(state, action)
     toggle_regex = function(_)
       local new_state = Utils.array.shallow_copy(state)
       new_state.rg_regex_enabled = not new_state.rg_regex_enabled
-      new_state.query_dirty = not new_state.query_dirty
       return new_state
     end,
 
     toggle_word = function(_)
       local new_state = Utils.array.shallow_copy(state)
       new_state.rg_word_enabled = not new_state.rg_word_enabled
-      new_state.query_dirty = not new_state.query_dirty
       return new_state
     end,
 
     toggle_case = function(_)
       local new_state = Utils.array.shallow_copy(state)
       new_state.rg_case_enabled = not new_state.rg_case_enabled
-      new_state.query_dirty = not new_state.query_dirty
       return new_state
     end,
 
     query_updated = function(query)
       local new_state = Utils.array.shallow_copy(state)
       new_state.query = query
-      new_state.query_dirty = not new_state.query_dirty
 
       -- clear previous results if we nuke the query line
       if #query < 2 then
         new_state.rg_messages = {}
+        new_state.rg_search_summary = nil
       end
-
-      return new_state
-    end,
-
-    cursor_moved_insert = function()
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.cursor_moved_insert = not new_state.cursor_moved_insert
 
       return new_state
     end,
@@ -94,6 +85,15 @@ M.reduce = function(state, action)
     rg_messages_parsed = function(rg_messages)
       local new_state = Utils.array.shallow_copy(state)
       new_state.rg_messages = rg_messages
+      new_state.rg_search_summary = nil
+
+      for _, rg_message in ipairs(rg_messages) do
+        if rg_message.type == "summary" then
+          new_state.rg_search_summary = rg_message.data
+          return new_state
+        end
+      end
+
       return new_state
     end,
 
@@ -101,7 +101,6 @@ M.reduce = function(state, action)
       local new_state = Utils.array.shallow_copy(state)
       local query = table.remove(new_state.completed_queries)
       new_state.query = query
-      new_state.query_dirty = not new_state.query_dirty
       table.insert(new_state.completed_queries, 1, query)
 
       return new_state
@@ -111,7 +110,6 @@ M.reduce = function(state, action)
       local new_state = Utils.array.shallow_copy(state)
       local query = table.remove(new_state.completed_queries, 1)
       new_state.query = query
-      new_state.query_dirty = not new_state.query_dirty
       table.insert(new_state.completed_queries, query)
 
       return new_state

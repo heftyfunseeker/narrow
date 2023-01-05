@@ -21,9 +21,9 @@ local function init_narrow()
     augroup narrow
       au!
       au VimResized * :lua require("narrow")._resize()
-      au CursorMoved * :lua require("narrow")._on_cursor_moved() 
-      au CursorMovedI * :lua require("narrow")._on_cursor_moved_insert() 
-      au InsertLeave * :lua require("narrow")._on_insert_leave() 
+      au CursorMoved * :lua require("narrow").dispatch_event("event_cursor_moved")
+      au CursorMovedI * :lua require("narrow").dispatch_event("event_cursor_moved_insert")
+      au InsertLeave * :lua require("narrow")._on_insert_leave()
     augroup END
   ]])
 end
@@ -75,22 +75,6 @@ M._resize = function()
   if not narrow_editor then return end
 
   narrow_editor:resize()
-end
-
-M._on_cursor_moved = function()
-  local a = vim.schedule_wrap(function()
-    if not narrow_editor then return end
-    narrow_editor:on_cursor_moved()
-  end)
-  a()
-end
-
-M._on_cursor_moved_insert = function()
-  local a = vim.schedule_wrap(function()
-    if not narrow_editor then return end
-    narrow_editor:on_cursor_moved_insert()
-  end)
-  a()
 end
 
 M._on_insert_leave = function()

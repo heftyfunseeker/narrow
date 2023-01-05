@@ -21,15 +21,26 @@ function SearchProvider:new(editor_context)
 
   this.confirmation_button_id = ConfirmationButtonIds.cancel
 
-  this.on_toggled = {}
-  this.on_toggled[HudButtonIds.toggle_regex] = function()
+  this.on_clicked = {}
+  this.on_clicked[HudButtonIds.toggle_regex] = function()
     this.store:dispatch({ type = "toggle_regex" })
+    this:search(this.store:get_state().query)
   end
-  this.on_toggled[HudButtonIds.toggle_word] = function()
+  this.on_clicked[HudButtonIds.toggle_word] = function()
     this.store:dispatch({ type = "toggle_word" })
+    this:search(this.store:get_state().query)
   end
-  this.on_toggled[HudButtonIds.toggle_case] = function()
+  this.on_clicked[HudButtonIds.toggle_case] = function()
     this.store:dispatch({ type = "toggle_case" })
+    this:search(this.store:get_state().query)
+  end
+  this.on_clicked[HudButtonIds.prev_search] = function()
+    this.store:dispatch({ type = "prev_query" })
+    this:search(this.store:get_state().query)
+  end
+  this.on_clicked[HudButtonIds.next_search] = function()
+    this.store:dispatch({ type = "next_query" })
+    this:search(this.store:get_state().query)
   end
 
   this.store:subscribe(function()
@@ -38,11 +49,11 @@ function SearchProvider:new(editor_context)
 
   this = setmetatable(this, self)
 
-  -- move this into the
+  -- @todo: make this configurable
   local prompt_text = "   "
   vim.fn.prompt_setprompt(this.input_canvas.window.buf, prompt_text)
 
-  this:_render_query("")
+  this:_render_query()
 
   return this
 end
@@ -79,15 +90,14 @@ function SearchProvider:on_event(event)
       if state.confirmation_button_id == ConfirmationButtonIds.confirm then
         self.on_confirm_cb()
         -- refresh our results
-        self.store:dispatch({ type = "query_updated", payload = self.prev_query })
+        self.store:dispatch({ type = "query_updated", payload = state.query })
       end
-
       self:close_confirmation_window()
     elseif self.results_canvas:has_focus() then
       self:open_result()
     elseif self.input_canvas:has_focus() then
       if state.hud_button_id then
-        self.on_toggled[state.hud_button_id]()
+        self.on_clicked[state.hud_button_id]()
       end
     end
   elseif event == "event_ui_focus_results" then
@@ -96,41 +106,70 @@ function SearchProvider:on_event(event)
     self.input_canvas:set_focus()
   elseif event == "event_update_real_file" then
     self:update_real_file()
+  elseif event == "event_cursor_moved_insert" then
+    self:_try_new_search()
+  end
+end
+
+function SearchProvider:_get_query_from_input_window()
+  local query = self.input_canvas.window:get_buffer_lines(0, 1)[1]
+  local prompt_text = vim.fn.prompt_getprompt(self.input_canvas.window.buf)
+  local _, e = string.find(query, prompt_text)
+  return query:sub(e + 1)
+end
+
+function SearchProvider:_try_new_search()
+  if not self.input_canvas:has_focus() then return end
+
+  local query = self:_get_query_from_input_window()
+
+  if self.store:get_state().query == query then
+    return
+  end
+
+  self.store:dispatch({ type = "query_updated", payload = query })
+
+  if #query >= 2 then
+    self:search(query)
   end
 end
 
 function SearchProvider:on_store_updated()
   local state = self.store:get_state()
 
-  local query = state.query
   local results_updated = self.prev_rg_messages ~= state.rg_messages
 
   if results_updated then
     self.prev_rg_messages = state.rg_messages
     self:render_rg_messages()
-  elseif state.query_dirty ~= self.query_dirty then
-    self.query_dirty = state.query_dirty
-    self.prev_query = query
-
-    if #query >= 2 then
-      self:search(query)
-      self:_render_query(query)
-    end
   end
 
   self:render_hud()
+  self:_render_query()
 
   if self.confirmation_canvas then
     self:render_confirmation_prompt()
   end
 end
 
-function SearchProvider:_render_query(query)
+function SearchProvider:_render_query()
+  local state = self.store:get_state()
+  local query = state.query or ""
+
   local prompt = Style:new():add_highlight("Identifier"):render("   ")
   local styled_query = Style:new():add_highlight("NarrowMatch"):render(query)
 
   self.input_canvas:clear()
   self.input_canvas:write(Style.join.horizontal({ prompt, styled_query }))
+
+  if state.rg_search_summary then
+    local matches = state.rg_search_summary.stats.matches
+    local matches_text = Style:new():set_width(12):align_horizontal(Style.position.Right):render("0/" .. matches)[1].text
+    local width, _ = self.input_canvas:get_dimensions()
+
+    self.input_canvas:write_virtual(matches_text, "Comment", { row = 0, col = width - 13 })
+  end
+
   self.input_canvas:render_new()
 end
 
@@ -219,7 +258,9 @@ function SearchProvider:render_rg_messages()
   local rg_messages = self.store:get_state().rg_messages
 
   for _, rg_message in ipairs(rg_messages) do
-    if rg_message.type == "end" then
+    if rg_message.type == "summary" then
+      self.input_canvas:write_virtual("0/100", "Comment", 0, 30)
+    elseif rg_message.type == "end" then
       self.results_canvas:write(TextBlock:from_string("", false))
       self.header_canvas:write(TextBlock:from_string("", false))
     elseif rg_message.type == "begin" then

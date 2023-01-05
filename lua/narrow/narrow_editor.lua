@@ -197,38 +197,6 @@ function NarrowEditor:resize()
   end
 end
 
-function NarrowEditor:_get_query_from_input_window()
-  local query = self.input_window:get_buffer_lines(0, 1)[1]
-  local prompt_text = vim.fn.prompt_getprompt(self.input_window.buf)
-  local _, e = string.find(query, prompt_text)
-  return query:sub(e + 1)
-end
-
-function NarrowEditor:on_cursor_moved()
-  -- self.store:dispatch({ type = "cursor_moved" })
-end
-
-function NarrowEditor:on_cursor_moved_insert()
-  self.store:dispatch({ type = "cursor_moved_insert" })
-
-  local curr_win = api.nvim_get_current_win()
-
-  if curr_win ~= self.input_window.win or api.nvim_get_mode().mode ~= "i" then
-    return
-  end
-
-  local query = self:_get_query_from_input_window()
-
-  if self.store:get_state().query == query then
-    return
-  end
-
-  self.store:dispatch({
-    type = "query_updated",
-    payload = query
-  })
-end
-
 function NarrowEditor:on_insert_leave()
   -- @Todo: move this to search provided
   local curr_win = api.nvim_get_current_win()

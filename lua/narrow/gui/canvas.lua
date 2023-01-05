@@ -7,14 +7,12 @@ function Canvas:new(window)
     window = window,
     lines = {},
     num_rows = 0,
-    selectable_text_blocks = {}
+    selectable_text_blocks = {},
+
+    virtual_text = {},
   }
   self.__index = self
   return setmetatable(new_obj, self)
-end
-
-function Canvas:render(only_styles)
-
 end
 
 function Canvas:write(text_block)
@@ -34,8 +32,15 @@ function Canvas:write(text_block)
   end
 end
 
+function Canvas:write_virtual(text, hl_name, pos)
+  table.insert(self.virtual_text, { text = text, hl_name = hl_name, pos = pos })
+end
+
 function Canvas:render_new(lock_buffer_after_draw)
   self.window:set_buf_option("modifiable", true)
+
+  -- clear any marks first
+  self.window:clear(nil, true)
 
   local window_lines = {}
   for _, line in ipairs(self.lines) do
@@ -50,6 +55,10 @@ function Canvas:render_new(lock_buffer_after_draw)
     end
   end
 
+  for _, vt in ipairs(self.virtual_text) do
+    self.window:add_virtual_text(vt.text, vt.hl_name, vt.pos)
+  end
+
   if lock_buffer_after_draw then
     self.window:set_buf_option("modifiable", false)
   end
@@ -59,8 +68,9 @@ end
 function Canvas:clear()
   self.lines = {}
   self.num_rows = 0
-
   self.selectable_text_blocks = {}
+
+  self.virtual_text = {}
 end
 
 -- @todo: delete/move this to search_provider - provider should handle how to select things?
