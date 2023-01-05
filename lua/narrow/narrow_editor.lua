@@ -39,7 +39,7 @@ function NarrowEditor:new(config)
 
   new_obj.store = Store:new(function(state, action)
     if new_obj.provider then
-      return new_obj.provider:handle_action(state, action)
+      return new_obj.provider:reduce(state, action)
     end
   end)
 
@@ -158,7 +158,7 @@ function NarrowEditor:_set_keymaps(config)
     self.results_window.buf,
     "n",
     "<C-w>",
-    ':lua require("narrow").update_real_file() <CR>',
+    ':lua require("narrow").action("update_real_file") <CR>',
     { nowait = true, noremap = true, silent = true }
   )
 end

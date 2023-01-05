@@ -3,7 +3,9 @@ local Devicons = require("nvim-web-devicons")
 local TextBlock = require("narrow.gui.text_block")
 local Style = require("narrow.gui.style")
 local Canvas = require("narrow.gui.canvas")
-local Window = require("narrow.window") local Toggle = require("narrow.gui.components.toggle")
+local Window = require("narrow.window") 
+local Toggle = require("narrow.gui.components.toggle")
+local Reducer = require("lua.narrow.provider.search_provider_reducer")
 
 local api = vim.api
 
@@ -58,116 +60,8 @@ function SearchProvider:new(editor_context)
   return this
 end
 
-function SearchProvider:handle_action(state, action)
-  local action_map = {
-    init_store = function(_)
-      return {
-        query = nil,
-        query_dirty = nil,
-        completed_queries = {},
-
-        rg_messages = {},
-        rg_regex_enabled = false,
-        rg_word_enabled = false,
-        rg_case_enabled = false,
-
-        action_id = nil,
-        action_dirty = false,
-      }
-    end,
-
-    toggle_regex = function(_)
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.rg_regex_enabled = not new_state.rg_regex_enabled
-      new_state.query_dirty = not new_state.query_dirty
-      return new_state
-    end,
-
-    toggle_word = function(_)
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.rg_word_enabled = not new_state.rg_word_enabled
-      new_state.query_dirty = not new_state.query_dirty
-      return new_state
-    end,
-
-    toggle_case = function(_)
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.rg_case_enabled = not new_state.rg_case_enabled
-      new_state.query_dirty = not new_state.query_dirty
-      return new_state
-    end,
-
-    query_updated = function(query)
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.query = query
-      new_state.query_dirty = not new_state.query_dirty
-
-      -- clear previous results if we nuke the query line
-      if #query < 2 then
-        new_state.rg_messages = {}
-      end
-
-      return new_state
-    end,
-
-    cursor_moved_insert = function()
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.cursor_moved_insert = not new_state.cursor_moved_insert
-
-      return new_state
-    end,
-
-    insert_enter = function()
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.insert_enter = not new_state.insert_enter
-
-      return new_state
-    end,
-
-    input_insert_leave = function()
-      local new_state = Utils.array.shallow_copy(state)
-      if state.completed_queries[-1] ~= state.query and #state.query >= 2 then
-        table.insert(new_state.completed_queries, new_state.query)
-      end
-      return new_state
-    end,
-
-    rg_messages_parsed = function(rg_messages)
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.rg_messages = rg_messages
-      return new_state
-    end,
-
-    prev_query = function()
-      local new_state = Utils.array.shallow_copy(state)
-      local query = table.remove(new_state.completed_queries)
-      new_state.query = query
-      new_state.query_dirty = not new_state.query_dirty
-      table.insert(new_state.completed_queries, 1, query)
-
-      return new_state
-    end,
-
-    next_query = function()
-      local new_state = Utils.array.shallow_copy(state)
-      local query = table.remove(new_state.completed_queries, 1)
-      new_state.query = query
-      new_state.query_dirty = not new_state.query_dirty
-      table.insert(new_state.completed_queries, query)
-
-      return new_state
-    end,
-
-    action = function(action_id)
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.action_id = action_id
-      new_state.action_dirty = not new_state.action_dirty
-
-      return new_state
-    end
-  }
-
-  return action_map[action.type](action.payload)
+function SearchProvider:reduce(state, action)
+  return Reducer.reduce(state, action)
 end
 
 function SearchProvider:_render_query(query)
@@ -567,6 +461,8 @@ function SearchProvider:_hud_handle_action(action_id)
     self.results_canvas:set_focus()
   elseif action_id == "action_ui_focus_input" then
     self.input_canvas:set_focus()
+  elseif action_id == "update_real_file" then
+    self:update_real_file()
   end
 end
 
