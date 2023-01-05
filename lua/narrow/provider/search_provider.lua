@@ -5,7 +5,7 @@ local Style = require("narrow.gui.style")
 local Canvas = require("narrow.gui.canvas")
 local Window = require("narrow.window")
 local Toggle = require("narrow.gui.components.toggle")
-local Reducer = require("lua.narrow.provider.search_provider_reducer")
+local Reducer = require("narrow.provider.search_provider_reducer")
 -- @todo: move these to separate file
 local HudButtonIds = Reducer.hud_button_ids
 local ConfirmationButtonIds = Reducer.confirmation_button_ids
@@ -121,7 +121,6 @@ function SearchProvider:on_store_updated()
   self:render_hud()
 
   if self.confirmation_canvas then
-    P("here")
     self:render_confirmation_prompt()
   end
 end
