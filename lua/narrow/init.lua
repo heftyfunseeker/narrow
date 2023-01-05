@@ -24,7 +24,6 @@ local function init_narrow()
       au CursorMoved * :lua require("narrow")._on_cursor_moved() 
       au CursorMovedI * :lua require("narrow")._on_cursor_moved_insert() 
       au InsertLeave * :lua require("narrow")._on_insert_leave() 
-      au InsertEnter * :lua require("narrow")._on_insert_enter() 
     augroup END
   ]])
 end
@@ -66,10 +65,10 @@ M.close = function()
   narrow_editor = nil
 end
 
-M.action = function(action_id)
+M.dispatch_event = function(event)
   if not narrow_editor then return end
 
-  narrow_editor:get_store():dispatch({ type = "action", payload = action_id })
+  narrow_editor:dispatch_event(event)
 end
 
 M._resize = function()
@@ -95,14 +94,6 @@ M._on_cursor_moved_insert = function()
 end
 
 M._on_insert_leave = function()
-  local a = vim.schedule_wrap(function()
-    if not narrow_editor then return end
-    narrow_editor:on_insert_leave()
-  end)
-  a()
-end
-
-M._on_insert_enter = function()
   local a = vim.schedule_wrap(function()
     if not narrow_editor then return end
     narrow_editor:on_insert_leave()

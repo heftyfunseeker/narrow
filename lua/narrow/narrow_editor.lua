@@ -139,18 +139,24 @@ function NarrowEditor:_build_layout(config)
   api.nvim_command("startinsert")
 end
 
+function NarrowEditor:dispatch_event(event)
+  if not self.provider then return end
+
+  self.provider:on_event(event)
+end
+
 function NarrowEditor:_set_keymaps(config)
   local opts = { nowait = true, noremap = true, silent = true }
 
-  api.nvim_set_keymap("n", "<Tab>", ':lua require("narrow").action("action_ui_next") <CR>', opts)
-  api.nvim_set_keymap("n", "<S-Tab>", ':lua require("narrow").action("action_ui_prev") <CR>', opts)
-  api.nvim_set_keymap("n", "<CR>", ':lua require("narrow").action("action_ui_confirm") <CR>', opts)
-  api.nvim_set_keymap("n", "<Esc>", ':nohlsearch <Bar> :lua require("narrow").action("action_ui_back") <CR>', opts)
+  api.nvim_set_keymap("n", "<Tab>", ':lua require("narrow").dispatch_event("event_ui_next") <CR>', opts)
+  api.nvim_set_keymap("n", "<S-Tab>", ':lua require("narrow").dispatch_event("event_ui_prev") <CR>', opts)
+  api.nvim_set_keymap("n", "<CR>", ':lua require("narrow").dispatch_event("event_ui_confirm") <CR>', opts)
+  api.nvim_set_keymap("n", "<Esc>", ':nohlsearch <Bar> :lua require("narrow").dispatch_event("event_ui_back") <CR>', opts)
   api.nvim_buf_set_keymap(
     self.input_window.buf,
     "n",
     "j",
-    ':lua require("narrow").action("action_ui_focus_results") <CR>',
+    ':lua require("narrow").dispatch_event("event_ui_focus_results") <CR>',
     { nowait = true, noremap = true, silent = true }
   )
   api.nvim_buf_set_keymap(self.input_window.buf, "i", "<CR>", "", { nowait = true, noremap = false, silent = true })
@@ -158,7 +164,7 @@ function NarrowEditor:_set_keymaps(config)
     self.results_window.buf,
     "n",
     "<C-w>",
-    ':lua require("narrow").action("update_real_file") <CR>',
+    ':lua require("narrow").dispatch_event("event_update_real_file") <CR>',
     { nowait = true, noremap = true, silent = true }
   )
 end
@@ -180,10 +186,6 @@ function NarrowEditor:_init_provider(config)
   }
 
   self.provider = SearchProvider:new(editor_context)
-end
-
-function NarrowEditor:get_config()
-  return self.config
 end
 
 function NarrowEditor:resize()
@@ -227,12 +229,6 @@ function NarrowEditor:on_cursor_moved_insert()
   })
 end
 
-function NarrowEditor:on_insert_enter()
-  self.store:dispatch({
-    type = "insert_enter",
-  })
-end
-
 function NarrowEditor:on_insert_leave()
   -- @Todo: move this to search provided
   local curr_win = api.nvim_get_current_win()
@@ -245,10 +241,6 @@ function NarrowEditor:on_insert_leave()
   self.store:dispatch({
     type = "input_insert_leave",
   })
-end
-
-function NarrowEditor:on_selected()
-  return self.provider:on_selected()
 end
 
 return NarrowEditor

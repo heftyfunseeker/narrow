@@ -51,13 +51,52 @@ function SearchProvider:reduce(state, action)
   return Reducer.reduce(state, action)
 end
 
-function SearchProvider:_render_query(query)
-  local prompt = Style:new():add_highlight("Identifier"):render("   ")
-  local styled_query = Style:new():add_highlight("NarrowMatch"):render(query)
+function SearchProvider:on_event(event)
+  local state = self.store:get_state()
 
-  self.input_canvas:clear()
-  self.input_canvas:write(Style.join.horizontal({ prompt, styled_query }))
-  self.input_canvas:render_new()
+  if event == "event_ui_next" then
+    if self.confirmation_canvas then
+      self.store:dispatch({ type = "focus_next_confirmation_button" })
+    elseif self.input_canvas:has_focus() then
+      self.store:dispatch({ type = "focus_next_hud_button" })
+    end
+  elseif event == "event_ui_prev" then
+    if self.input_canvas:has_focus() then
+      self.store:dispatch({ type = "focus_prev_hud_button" })
+    end
+  elseif event == "event_ui_back" then
+    if self.confirmation_canvas then
+      self:close_confirmation_window()
+    elseif self.results_canvas:has_focus() then
+      self.input_canvas:set_focus()
+    elseif state.hud_button_id ~= HudButtonIds.inactive then
+      self.store:dispatch({ type = "set_hud_button_focus", payload = HudButtonIds.inactive })
+    else
+      require("narrow").close()
+    end
+  elseif event == "event_ui_confirm" then
+    if self.confirmation_canvas then
+      if state.confirmation_button_id == ConfirmationButtonIds.confirm then
+        self.on_confirm_cb()
+        -- refresh our results
+        self.store:dispatch({ type = "query_updated", payload = self.prev_query })
+      end
+
+      self:close_confirmation_window()
+    elseif self.results_canvas:has_focus() then
+      self:open_result()
+    elseif self.input_canvas:has_focus() then
+      if state.hud_button_id then
+        self.on_toggled[state.hud_button_id]()
+      end
+    end
+  elseif event == "event_ui_focus_results" then
+    self.results_canvas:set_focus()
+  elseif event == "event_ui_focus_input" then
+    self.input_canvas:set_focus()
+  elseif event == "event_update_real_file" then
+    self:update_real_file()
+  end
 end
 
 function SearchProvider:on_store_updated()
@@ -65,12 +104,6 @@ function SearchProvider:on_store_updated()
 
   local query = state.query
   local results_updated = self.prev_rg_messages ~= state.rg_messages
-
-  if state.insert_enter ~= self.insert_enter then
-    self.insert_enter = state.insert_enter
-    self.hud_button_id = -1
-    self:render_hud()
-  end
 
   if results_updated then
     self.prev_rg_messages = state.rg_messages
@@ -85,10 +118,21 @@ function SearchProvider:on_store_updated()
     end
   end
 
-  if state.action_dirty ~= self.action_dirty then
-    self.action_dirty = state.action_dirty
-    self:_handle_action(state.action_id)
+  self:render_hud()
+
+  if self.confirmation_canvas then
+    P("here")
+    self:render_confirmation_prompt()
   end
+end
+
+function SearchProvider:_render_query(query)
+  local prompt = Style:new():add_highlight("Identifier"):render("   ")
+  local styled_query = Style:new():add_highlight("NarrowMatch"):render(query)
+
+  self.input_canvas:clear()
+  self.input_canvas:write(Style.join.horizontal({ prompt, styled_query }))
+  self.input_canvas:render_new()
 end
 
 function SearchProvider:on_resized()
@@ -243,8 +287,6 @@ function SearchProvider:render_rg_messages()
 
   api.nvim_win_set_cursor(self.results_canvas.window.win, { 1, 0 })
   api.nvim_win_set_cursor(self.header_canvas.window.win, { 1, 0 })
-
-  self:render_hud()
 end
 
 function SearchProvider:render_hud()
@@ -319,8 +361,8 @@ function SearchProvider:update_real_file()
   end
   local prompt_text = "Are you sure you want to change " .. #changes .. " lines?"
 
-  self:show_confirmation_window(prompt_text, function()
-    -- TODO: batch these changes by header to avoid the io thrashing
+  self:open_confirmation_window(prompt_text, function()
+    -- @todo: batch these changes by header to avoid the io thrashing
     for _, change in ipairs(changes) do
       local file_lines = Utils.string_to_lines(Utils.read_file_sync(change.path))
       file_lines[change.row] = change.text
@@ -329,7 +371,7 @@ function SearchProvider:update_real_file()
   end)
 end
 
-function SearchProvider:show_confirmation_window(prompt_text, on_confirm_cb)
+function SearchProvider:open_confirmation_window(prompt_text, on_confirm_cb)
   self.on_confirm_cb = on_confirm_cb
   self.prompt_text = prompt_text
 
@@ -360,10 +402,21 @@ function SearchProvider:show_confirmation_window(prompt_text, on_confirm_cb)
   self:render_confirmation_prompt()
 end
 
+function SearchProvider:close_confirmation_window()
+  self.on_confirm_cb = nil
+  self.prompt_text = nil
+
+  self.confirmation_canvas:drop()
+  self.confirmation_canvas = nil
+  -- set button to cancel
+  self.store:dispatch({ type = "focus_next_confirmation_button" })
+end
+
 function SearchProvider:render_confirmation_prompt()
   self.confirmation_canvas:clear()
 
   local width, _ = self.confirmation_canvas:get_dimensions()
+  local state = self.store:get_state()
 
   local button_style = Style
       :new()
@@ -389,7 +442,7 @@ function SearchProvider:render_confirmation_prompt()
   local ok_style = button_style
   local cancel_style = button_style
 
-  if self.confirmation_button_id == ConfirmationButtonIds.confirm then
+  if state.confirmation_button_id == ConfirmationButtonIds.confirm then
     ok_style = selected_button_style
     cancel_style:margin_right(1)
   else
@@ -405,73 +458,6 @@ function SearchProvider:render_confirmation_prompt()
 
   self.confirmation_canvas:write(ui)
   self.confirmation_canvas:render_new(true)
-end
-
-function SearchProvider:_handle_action(action_id)
-  if self.confirmation_canvas then
-    self:_confirmation_handle_action(action_id)
-  else
-    self:_hud_handle_action(action_id)
-  end
-end
-
-function SearchProvider:_hud_handle_action(action_id)
-  local state = self.store:get_state()
-
-  if action_id == "action_ui_next" then
-    if self.input_canvas:has_focus() then
-      state.hud_button_id = (state.hud_button_id + 1) % HudButtonIds.COUNT
-      self:render_hud()
-    end
-  elseif action_id == "action_ui_prev" then
-    if self.input_canvas:has_focus() then
-      state.hud_button_id = (state.hud_button_id - 1) % HudButtonIds.COUNT
-      self:render_hud()
-    end
-  elseif action_id == "action_ui_back" then
-    if self.results_canvas:has_focus() then
-      self.input_canvas:set_focus()
-    elseif state.hud_button_id ~= HudButtonIds.inactive then
-      state.hud_button_id = -1
-      self:render_hud()
-    else
-      require("narrow").close()
-    end
-  elseif action_id == "action_ui_confirm" then
-    if self.results_canvas:has_focus() then
-      self:open_result()
-    elseif self.input_canvas:has_focus() then
-      if state.hud_button_id then
-        self.on_toggled[state.hud_button_id]()
-      end
-    end
-  elseif action_id == "action_ui_focus_results" then
-    self.results_canvas:set_focus()
-  elseif action_id == "action_ui_focus_input" then
-    self.input_canvas:set_focus()
-  elseif action_id == "update_real_file" then
-    self:update_real_file()
-  end
-end
-
-function SearchProvider:_confirmation_handle_action(action_id)
-  if action_id == "action_ui_next" then
-    self.confirmation_button_id = (self.confirmation_button_id + 1) % ConfirmationButtonIds.COUNT
-    self:render_confirmation_prompt()
-  elseif action_id == "action_ui_confirm" then
-    if self.confirmation_button_id == ConfirmationButtonIds.confirm then
-      self.on_confirm_cb()
-      -- refresh our results
-      self.store:dispatch({ type = "query_updated", payload = self.prev_query })
-    end
-
-    self.on_confirm_cb = nil
-    self.prompt_text = nil
-
-    self.confirmation_canvas:drop()
-    self.confirmation_canvas = nil
-    self.confirmation_button_id = ConfirmationButtonIds.cancel
-  end
 end
 
 function SearchProvider:open_result()

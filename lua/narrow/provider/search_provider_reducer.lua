@@ -83,13 +83,6 @@ M.reduce = function(state, action)
       return new_state
     end,
 
-    insert_enter = function()
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.insert_enter = not new_state.insert_enter
-
-      return new_state
-    end,
-
     input_insert_leave = function()
       local new_state = Utils.array.shallow_copy(state)
       if state.completed_queries[-1] ~= state.query and #state.query >= 2 then
@@ -124,46 +117,29 @@ M.reduce = function(state, action)
       return new_state
     end,
 
-    set_confirmation_prompt = function(confirmation_prompt)
+    focus_next_confirmation_button = function()
       local new_state = Utils.array.shallow_copy(state)
-      new_state.confirmation_prompt = confirmation_prompt
-
+      new_state.confirmation_button_id = (new_state.confirmation_button_id + 1) % confirmation_button_ids.COUNT
       return new_state
     end,
 
-    ui_next = function()
+    focus_next_hud_button = function()
       local new_state = Utils.array.shallow_copy(state)
-      if new_state.confirmation_prompt then
-        new_state.confirmation_button_id = (state.confirmation_button_id + 1) % confirmation_button_ids.COUNT
-      elseif state.input_canvas.has_focus() then
-        state.hud_button_id = (state.hud_button_id + 1) % hud_button_ids.COUNT
-      end
+      new_state.hud_button_id = (new_state.hud_button_id + 1) % hud_button_ids.COUNT
       return new_state
     end,
 
-    ui_prev = function()
+    focus_prev_hud_button = function()
       local new_state = Utils.array.shallow_copy(state)
-      if new_state.input_canvas:has_focus() then
-        new_state.hud_button_id = (new_state.hud_button_id - 1) % hud_button_ids.COUNT
-      end
+      new_state.hud_button_id = (new_state.hud_button_id - 1) % hud_button_ids.COUNT
       return new_state
     end,
 
-    set_hud_button_id = function(hud_button_id)
+    set_hud_button_focus = function(hud_button_id)
       local new_state = Utils.array.shallow_copy(state)
       new_state.hud_button_id = hud_button_id
       return new_state
     end,
-
-    -- actions are meant to be used for input events and other controller event types
-    -- the action is cached and can be responded to in the store:on_changed event - after reducers have been called :)
-    action = function(action_id)
-      local new_state = Utils.array.shallow_copy(state)
-      new_state.action_id = action_id
-      new_state.action_dirty = not new_state.action_dirty
-
-      return new_state
-    end
   }
 
   return action_map[action.type](action.payload)
