@@ -3,26 +3,14 @@ local Devicons = require("nvim-web-devicons")
 local TextBlock = require("narrow.gui.text_block")
 local Style = require("narrow.gui.style")
 local Canvas = require("narrow.gui.canvas")
-local Window = require("narrow.window") 
+local Window = require("narrow.window")
 local Toggle = require("narrow.gui.components.toggle")
 local Reducer = require("lua.narrow.provider.search_provider_reducer")
+-- @todo: move these to separate file
+local HudButtonIds = Reducer.hud_button_ids
+local ConfirmationButtonIds = Reducer.confirmation_button_ids
 
 local api = vim.api
-
-local hud_button_ids = {
-  prev_search = 0,
-  next_search = 1,
-  toggle_regex = 2,
-  toggle_case = 3,
-  toggle_word = 4,
-  COUNT = 5
-}
-
-local confirmation_button_ids = {
-  cancel = 0,
-  confirm = 1,
-  COUNT = 2
-}
 
 local SearchProvider = {}
 SearchProvider.__index = SearchProvider
@@ -31,17 +19,16 @@ SearchProvider.__index = SearchProvider
 function SearchProvider:new(editor_context)
   local this = Utils.array.shallow_copy(editor_context)
 
-  this.confirmation_button_id = confirmation_button_ids.cancel
-  this.hud_button_id = -1
+  this.confirmation_button_id = ConfirmationButtonIds.cancel
 
   this.on_toggled = {}
-  this.on_toggled[hud_button_ids.toggle_regex] = function()
+  this.on_toggled[HudButtonIds.toggle_regex] = function()
     this.store:dispatch({ type = "toggle_regex" })
   end
-  this.on_toggled[hud_button_ids.toggle_word] = function()
+  this.on_toggled[HudButtonIds.toggle_word] = function()
     this.store:dispatch({ type = "toggle_word" })
   end
-  this.on_toggled[hud_button_ids.toggle_case] = function()
+  this.on_toggled[HudButtonIds.toggle_case] = function()
     this.store:dispatch({ type = "toggle_case" })
   end
 
@@ -220,7 +207,6 @@ function SearchProvider:render_rg_messages()
       local result_text = rg_message.data.lines.text
 
       local result_line
-      local on_select
 
       if #result_text > 1024 then
         result_line = Style:new():add_highlight("Error"):render("[long line]")
@@ -277,13 +263,13 @@ function SearchProvider:render_hud()
   local next_button_style = prev_button_style:clone():margin_left(nil)
 
   -- @todo: move current button into state
-  local regex_toggle = Toggle:new("regex", state.rg_regex_enabled, self.hud_button_id == hud_button_ids.toggle_regex)
-  local case_toggle = Toggle:new("case", state.rg_case_enabled, self.hud_button_id == hud_button_ids.toggle_case)
-  local word_toggle = Toggle:new("word", state.rg_word_enabled, self.hud_button_id == hud_button_ids.toggle_word)
+  local regex_toggle = Toggle:new("regex", state.rg_regex_enabled, state.hud_button_id == HudButtonIds.toggle_regex)
+  local case_toggle = Toggle:new("case", state.rg_case_enabled, state.hud_button_id == HudButtonIds.toggle_case)
+  local word_toggle = Toggle:new("word", state.rg_word_enabled, state.hud_button_id == HudButtonIds.toggle_word)
 
-  if self.hud_button_id == hud_button_ids.prev_search then
+  if state.hud_button_id == HudButtonIds.prev_search then
     prev_button_style:border_highlight("Function"):add_highlight("Function")
-  elseif self.hud_button_id == hud_button_ids.next_search then
+  elseif state.hud_button_id == HudButtonIds.next_search then
     next_button_style:border_highlight("Function"):add_highlight("Function")
   end
 
@@ -403,7 +389,7 @@ function SearchProvider:render_confirmation_prompt()
   local ok_style = button_style
   local cancel_style = button_style
 
-  if self.confirmation_button_id == confirmation_button_ids.confirm then
+  if self.confirmation_button_id == ConfirmationButtonIds.confirm then
     ok_style = selected_button_style
     cancel_style:margin_right(1)
   else
@@ -430,21 +416,23 @@ function SearchProvider:_handle_action(action_id)
 end
 
 function SearchProvider:_hud_handle_action(action_id)
+  local state = self.store:get_state()
+
   if action_id == "action_ui_next" then
     if self.input_canvas:has_focus() then
-      self.hud_button_id = (self.hud_button_id + 1) % hud_button_ids.COUNT
+      state.hud_button_id = (state.hud_button_id + 1) % HudButtonIds.COUNT
       self:render_hud()
     end
   elseif action_id == "action_ui_prev" then
     if self.input_canvas:has_focus() then
-      self.hud_button_id = (self.hud_button_id - 1) % hud_button_ids.COUNT
+      state.hud_button_id = (state.hud_button_id - 1) % HudButtonIds.COUNT
       self:render_hud()
     end
   elseif action_id == "action_ui_back" then
     if self.results_canvas:has_focus() then
       self.input_canvas:set_focus()
-    elseif self.hud_button_id ~= -1 then
-      self.hud_button_id = -1
+    elseif state.hud_button_id ~= HudButtonIds.inactive then
+      state.hud_button_id = -1
       self:render_hud()
     else
       require("narrow").close()
@@ -453,8 +441,8 @@ function SearchProvider:_hud_handle_action(action_id)
     if self.results_canvas:has_focus() then
       self:open_result()
     elseif self.input_canvas:has_focus() then
-      if self.hud_button_id then
-        self.on_toggled[self.hud_button_id]()
+      if state.hud_button_id then
+        self.on_toggled[state.hud_button_id]()
       end
     end
   elseif action_id == "action_ui_focus_results" then
@@ -468,10 +456,10 @@ end
 
 function SearchProvider:_confirmation_handle_action(action_id)
   if action_id == "action_ui_next" then
-    self.confirmation_button_id = (self.confirmation_button_id + 1) % confirmation_button_ids.COUNT
+    self.confirmation_button_id = (self.confirmation_button_id + 1) % ConfirmationButtonIds.COUNT
     self:render_confirmation_prompt()
   elseif action_id == "action_ui_confirm" then
-    if self.confirmation_button_id == confirmation_button_ids.confirm then
+    if self.confirmation_button_id == ConfirmationButtonIds.confirm then
       self.on_confirm_cb()
       -- refresh our results
       self.store:dispatch({ type = "query_updated", payload = self.prev_query })
@@ -482,7 +470,7 @@ function SearchProvider:_confirmation_handle_action(action_id)
 
     self.confirmation_canvas:drop()
     self.confirmation_canvas = nil
-    self.confirmation_button_id = confirmation_button_ids.cancel
+    self.confirmation_button_id = ConfirmationButtonIds.cancel
   end
 end
 
