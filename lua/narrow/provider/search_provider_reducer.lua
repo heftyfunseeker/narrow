@@ -40,6 +40,7 @@ M.reduce = function(state, action)
 
         hud_button_id = hud_button_ids.inactive,
         confirmation_button_id = confirmation_button_ids.cancel,
+        item_hovered = nil,
       }
     end,
 
@@ -138,6 +139,12 @@ M.reduce = function(state, action)
       new_state.hud_button_id = hud_button_id
       return new_state
     end,
+
+    set_hovered_item = function(item)
+      local new_state = Utils.array.shallow_copy(state)
+      new_state.hovered_item = item
+      return new_state
+    end
   }
 
   return action_map[action.type](action.payload)

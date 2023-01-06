@@ -108,6 +108,19 @@ function SearchProvider:on_event(event)
     self:update_real_file()
   elseif event == "event_cursor_moved_insert" then
     self:_try_new_search()
+  elseif event == "event_cursor_moved" then
+    self:_try_hover_item()
+  end
+end
+
+function SearchProvider:_try_hover_item()
+  local cursor = self.results_canvas.window:get_cursor_location()
+  local row = cursor[1]
+  local col = cursor[2]
+
+  local item_state = self.results_canvas:get_state(row, col)
+  if item_state then
+    self.store:dispatch({ type = "set_hovered_item", payload = item_state })
   end
 end
 
@@ -141,10 +154,10 @@ function SearchProvider:on_store_updated()
 
   if results_updated then
     self.prev_rg_messages = state.rg_messages
-    self:render_rg_messages()
+    self:_render_rg_messages()
   end
 
-  self:render_hud()
+  self:_render_hud()
   self:_render_query()
 
   if self.confirmation_canvas then
@@ -163,8 +176,13 @@ function SearchProvider:_render_query()
   self.input_canvas:write(Style.join.horizontal({ prompt, styled_query }))
 
   if state.rg_search_summary then
+    local match_number = 0
+    if state.hovered_item then
+      match_number = state.hovered_item.match_number
+    end
+
     local matches = state.rg_search_summary.stats.matches
-    local matches_text = Style:new():set_width(12):align_horizontal(Style.position.Right):render("0/" .. matches)[1].text
+    local matches_text = Style:new():set_width(12):align_horizontal(Style.position.Right):render(match_number .. "/" .. matches)[1].text
     local width, _ = self.input_canvas:get_dimensions()
 
     self.input_canvas:write_virtual(matches_text, "Comment", { row = 0, col = width - 13 })
@@ -174,7 +192,7 @@ function SearchProvider:_render_query()
 end
 
 function SearchProvider:on_resized()
-  self:render_hud()
+  self:_render_hud()
 end
 
 function SearchProvider:build_rg_args(query_term)
@@ -251,16 +269,15 @@ function SearchProvider:search(query_term)
   vim.loop.read_start(Stdout, onread)
 end
 
-function SearchProvider:render_rg_messages()
+function SearchProvider:_render_rg_messages()
   self.results_canvas:clear()
   self.header_canvas:clear()
 
   local rg_messages = self.store:get_state().rg_messages
 
+  local match_number = 1
   for _, rg_message in ipairs(rg_messages) do
-    if rg_message.type == "summary" then
-      self.input_canvas:write_virtual("0/100", "Comment", 0, 30)
-    elseif rg_message.type == "end" then
+    if rg_message.type == "end" then
       self.results_canvas:write(TextBlock:from_string("", false))
       self.header_canvas:write(TextBlock:from_string("", false))
     elseif rg_message.type == "begin" then
@@ -306,9 +323,18 @@ function SearchProvider:render_rg_messages()
         end
 
         result_line = result_style:render(result_text)
+
+        local fragment_start = 0
+        for _, match in ipairs(submatches) do
+          local match_text = match.match.text
+          result_line:add_state({ path = rg_message.data.path.text, line_number = rg_message.data.line_number,
+            match_start = match.start, match_number = match_number },
+            { col_start = fragment_start, col_end = match.start + #match_text })
+          fragment_start = match.start + #match_text
+          match_number = match_number + 1
+        end
       end
 
-      result_line:set_state(rg_message)
       self.results_canvas:write(result_line)
 
       local line_number = rg_message.data.line_number
@@ -329,7 +355,7 @@ function SearchProvider:render_rg_messages()
   api.nvim_win_set_cursor(self.header_canvas.window.win, { 1, 0 })
 end
 
-function SearchProvider:render_hud()
+function SearchProvider:_render_hud()
   self.hud_canvas:clear()
 
   local state = self.store:get_state()
@@ -391,12 +417,12 @@ function SearchProvider:update_real_file()
   for row, line in ipairs(buffer_lines) do
     local original_line = original_lines[row]
     if line ~= original_line then
-      local rg_message = self.results_canvas:get_state(row, 0)
-      if rg_message == nil then
+      local item = self.results_canvas:get_state(row, 0)
+      if item == nil then
         print("narrow warning: State was corrupted. Aborting update to files")
         return
       end
-      table.insert(changes, { path = rg_message.data.path.text, row = rg_message.data.line_number, text = line })
+      table.insert(changes, { path = item.path, row = item.line_number, text = line })
     end
   end
   local prompt_text = "Are you sure you want to change " .. #changes .. " lines?"
@@ -505,18 +531,12 @@ function SearchProvider:open_result()
   local row = cursor[1]
   local col = cursor[2]
 
-  local rg_message = self.results_canvas:get_state(row, col)
-  if not rg_message or not rg_message.data then return false end
-
-  local submatches = rg_message.data.submatches
-  if not submatches then return false end
+  local match_state = self.results_canvas:get_state(row, col)
 
   api.nvim_set_current_win(self.prev_win)
-  api.nvim_command("edit " .. rg_message.data.path.text)
-  for _, match in ipairs(submatches) do
-    api.nvim_win_set_cursor(0, { rg_message.data.line_number, match.start })
-    require("narrow").close()
-  end
+  api.nvim_command("edit " .. match_state.path)
+  api.nvim_win_set_cursor(0, { match_state.line_number, match_state.match_start })
+  require("narrow").close()
 end
 
 return SearchProvider

@@ -65,10 +65,15 @@ M.close = function()
   narrow_editor = nil
 end
 
+-- used for hooking into user/controller events
 M.dispatch_event = function(event)
   if not narrow_editor then return end
 
-  narrow_editor:dispatch_event(event)
+  -- schedule this for the next event cycle to keep event chains somewhat sane
+  local deferred_event = vim.schedule_wrap(function()
+    narrow_editor:dispatch_event(event)
+  end)
+  deferred_event()
 end
 
 M._resize = function()

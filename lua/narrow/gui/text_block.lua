@@ -149,12 +149,16 @@ local function make_state(state, row, col_start, col_end)
   }
 end
 
-function TextBlock:set_state(state)
+function TextBlock:add_state(state, opts)
   if not state then return end
 
+  local col_start = opts.col_start
+  if not col_start then col_start = 0 end
+
   for row, line in ipairs(self) do
-    -- @todo: do we need to handle col start here?
-    line.states = { make_state(state, row, 0, #line.text) }
+    local col_end = opts.col_end
+    if not col_end then col_end = col_start + #line.text end
+    table.insert(line.states, make_state(state, row, col_start, col_end))
   end
 end
 
