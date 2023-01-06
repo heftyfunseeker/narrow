@@ -182,7 +182,8 @@ function SearchProvider:_render_query()
     end
 
     local matches = state.rg_search_summary.stats.matches
-    local matches_text = Style:new():set_width(12):align_horizontal(Style.position.Right):render(match_number .. "/" .. matches)[1].text
+    local matches_text = Style:new():set_width(12):align_horizontal(Style.position.Right):render(match_number ..
+      "/" .. matches)[1].text
     local width, _ = self.input_canvas:get_dimensions()
 
     self.input_canvas:write_virtual(matches_text, "Comment", { row = 0, col = width - 13 })
@@ -314,7 +315,6 @@ function SearchProvider:_render_rg_messages()
       else
         local submatches = rg_message.data.submatches
 
-        -- treesitter highlighting
         local result_style = Style:new()
 
         for _, match in ipairs(submatches) do
@@ -324,13 +324,21 @@ function SearchProvider:_render_rg_messages()
 
         result_line = result_style:render(result_text)
 
-        local fragment_start = 0
-        for _, match in ipairs(submatches) do
+        local col_start = 0
+        for match_index, match in ipairs(submatches) do
           local match_text = match.match.text
+          local col_end
+          if match_index == #submatches then
+            col_end = #result_text
+          else
+            col_end = match.start + #match_text
+          end
+
           result_line:add_state({ path = rg_message.data.path.text, line_number = rg_message.data.line_number,
             match_start = match.start, match_number = match_number },
-            { col_start = fragment_start, col_end = match.start + #match_text })
-          fragment_start = match.start + #match_text
+            { col_start = col_start, col_end = col_end })
+
+          col_start = match.start + #match_text
           match_number = match_number + 1
         end
       end
@@ -418,15 +426,13 @@ function SearchProvider:update_real_file()
     local original_line = original_lines[row]
     if line ~= original_line then
       local item = self.results_canvas:get_state(row, 0)
-      if item == nil then
-        print("narrow warning: State was corrupted. Aborting update to files")
-        return
+      if item then
+        table.insert(changes, { path = item.path, row = item.line_number, text = line })
       end
-      table.insert(changes, { path = item.path, row = item.line_number, text = line })
     end
   end
-  local prompt_text = "Are you sure you want to change " .. #changes .. " lines?"
 
+  local prompt_text = "Are you sure you want to change " .. #changes .. " lines?"
   self:open_confirmation_window(prompt_text, function()
     -- @todo: batch these changes by header to avoid the io thrashing
     for _, change in ipairs(changes) do
@@ -532,6 +538,7 @@ function SearchProvider:open_result()
   local col = cursor[2]
 
   local match_state = self.results_canvas:get_state(row, col)
+  if not match_state then return end
 
   api.nvim_set_current_win(self.prev_win)
   api.nvim_command("edit " .. match_state.path)
