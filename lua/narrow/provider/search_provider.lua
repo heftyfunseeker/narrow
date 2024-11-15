@@ -113,15 +113,27 @@ function SearchProvider:on_event(event)
   end
 end
 
+LAST = nil
 function SearchProvider:_try_hover_item()
-  local cursor = self.results_canvas.window:get_cursor_location()
-  local row = cursor[1]
-  local col = cursor[2]
-
-  local item_state = self.results_canvas:get_state(row, col)
-  if item_state then
-    self.store:dispatch({ type = "set_hovered_item", payload = item_state })
-  end
+  -- local cursor = self.results_canvas.window:get_cursor_location()
+  -- local row = cursor[1]
+  -- local col = cursor[2]
+  --
+  -- local item_state = self.results_canvas:get_state(row, col)
+  -- if not item_state then return end
+  --
+  -- self.store:dispatch({ type = "set_hovered_item", payload = item_state })
+  --
+  -- local a = vim.schedule_wrap(function()
+  --   if LAST ~= item_state then
+  --     LAST = item_state
+  --     api.nvim_set_current_win(self.prev_win)
+  --     api.nvim_command("edit " .. item_state.path)
+  --     api.nvim_win_set_cursor(0, { item_state.line_number, item_state.match_start })
+  --     self.results_canvas:set_focus()
+  --   end
+  -- end)
+  -- a()
 end
 
 function SearchProvider:_get_query_from_input_window()
